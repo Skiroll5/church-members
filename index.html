@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>كنيسة القديس أثناسيوس الرسولي - سجل بيانات الخدمة والمخدومين</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          screens: {
+            'xs': '440px',
+          },
+          fontFamily: {
+            sans: ['Cairo', 'Inter', 'system-ui', 'sans-serif'],
+            mono: ['Inter', 'monospace']
+          }
+        }
+      }
+    };
+  </script>
+</head>
+<body class="h-full bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100 font-sans antialiased selection:bg-slate-800 selection:text-white flex flex-col">
+
+  <!-- Printable Area (Visible strictly on Print) -->
+  <div id="print-area" class="hidden print:block print:w-full print:m-0 print:p-0"></div>
+
+  <!-- Screen Application (Hidden on Print) -->
+  <div class="print:hidden min-h-screen flex flex-col flex-1">
+    
+    <!-- Top Global Header -->
+    <header class="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-xs">
+      <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2 sm:py-2.5">
+        <div class="flex items-center justify-between gap-2 sm:gap-4">
+          
+          <!-- Church Brand -->
+          <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+            <img src="Picture5.png" alt="شعار كنيسة القديس أثناسيوس" class="w-8 h-8 sm:w-10 sm:h-10 object-contain rounded-md bg-white border border-slate-200 dark:border-slate-700">
+            <div>
+              <h1 class="text-xs sm:text-base font-bold text-slate-900 dark:text-white leading-tight">
+                <span>كنيسة القديس أثناسيوس</span><span class="hidden xs:inline"> الرسولي</span>
+              </h1>
+            </div>
+          </div>
+
+          <!-- Quick Search Input in Header (Desktop / Tablet) -->
+          <div class="relative flex-1 max-w-md hidden md:block">
+            <input type="text" id="search-input" placeholder="بحث بالاسم، رقم الهاتف، المؤهل، الملاحظات..." class="w-full pr-8 pl-8 py-1.5 rounded-lg text-xs bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:bg-white dark:focus:bg-slate-900 focus:ring-1 focus:ring-slate-900">
+            <span class="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none text-slate-400">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            </span>
+            <button type="button" id="btn-clear-search" class="absolute inset-y-0 left-0 flex items-center pl-2.5 text-slate-400 hover:text-slate-600 hidden text-xs">
+              ✕
+            </button>
+          </div>
+
+          <!-- Top Action Buttons -->
+          <div class="flex items-center gap-1.5 sm:gap-2">
+            <!-- Upload Data File Button (Client-side & Confidential) -->
+            <button type="button" id="btn-upload-file-header" class="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 dark:hover:bg-indigo-900 border border-indigo-200 dark:border-indigo-800 transition-colors shrink-0 cursor-pointer shadow-2xs" title="رفع ملف البيانات المحلي بأمان وسرية تامة">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+              <span><span class="hidden sm:inline">رفع ملف </span>البيانات</span>
+            </button>
+
+            <!-- Add Member Button -->
+            <button type="button" id="btn-add-member" class="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 shadow-xs transition-colors shrink-0 cursor-pointer">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+              <span><span class="hidden xs:inline">إضافة </span>عضو جديد</span>
+            </button>
+
+            <!-- Print to PDF Button -->
+            <button type="button" id="btn-print-pdf" class="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 transition-colors cursor-pointer" title="طباعة كشف منسق إلى PDF">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4H7v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+              <span class="hidden sm:inline">طباعة</span>
+            </button>
+
+            <!-- More Options Menu -->
+            <div class="relative" id="more-options-container">
+              <button type="button" id="btn-more-options-trigger" class="p-1.5 rounded-lg bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 transition-colors cursor-pointer" title="خيارات إضافية (حفظ، تصدير، استيراد)">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>
+              </button>
+              <div id="more-options-menu" class="hidden absolute left-0 mt-2 w-56 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl py-2 z-50 text-xs">
+                <button type="button" id="btn-save-disk" class="w-full text-right px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-between text-slate-700 dark:text-slate-300 font-medium">
+                  <span>حفظ وتنزيل الملف المحدث</span>
+                  <span class="text-slate-400 font-mono text-[10px]">تنزيل</span>
+                </button>
+                <button type="button" id="btn-import-trigger" class="w-full text-right px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-between text-indigo-700 dark:text-indigo-300 font-semibold">
+                  <span>رفع ملف بيانات محلي</span>
+                  <span class="text-slate-400 font-mono text-[10px]">رفع</span>
+                </button>
+                <button type="button" id="btn-export-csv" class="w-full text-right px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-between text-slate-700 dark:text-slate-300">
+                  <span>تصدير كشف إكسيل</span>
+                  <span class="text-slate-400 font-mono text-[10px]">Excel</span>
+                </button>
+                <div class="border-t border-slate-100 dark:border-slate-800 my-1"></div>
+                <button type="button" id="btn-clear-session" class="w-full text-right px-4 py-2 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center justify-between text-rose-600 dark:text-rose-400" title="مسح البيانات من ذاكرة المتصفح لإغلاق الجلسة بأمان">
+                  <span>مسح وقفل الجلسة محلياً</span>
+                  <span class="text-rose-400 font-mono text-[10px]">إغلاق</span>
+                </button>
+                <div class="border-t border-slate-100 dark:border-slate-800 my-1"></div>
+                <button type="button" id="btn-toggle-theme" class="w-full text-right px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-between text-slate-600 dark:text-slate-400">
+                  <span>الوضع الليلي / الفاتح</span>
+                </button>
+              </div>
+            </div>
+
+            <input type="file" id="import-file-input" accept=".json" class="hidden">
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Sticky Jump Navigation Bar -->
+      <div class="bg-slate-100/80 dark:bg-slate-900/80 border-t border-slate-200 dark:border-slate-800 px-4 sm:px-6 lg:px-8 py-1.5">
+        <div class="max-w-7xl mx-auto flex items-center justify-between gap-3">
+          <div id="group-jump-nav" class="flex-1 overflow-x-auto scrollbar-none">
+            <!-- Populated via ui.js -->
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Mobile Search Bar (visible only on small screens) -->
+    <div class="p-2.5 sm:p-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 md:hidden">
+      <div class="relative">
+        <input type="text" id="mobile-search-input" placeholder="بحث بالاسم، الهاتف، المؤهل..." class="w-full pr-8 pl-8 py-1.5 rounded-lg text-xs bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-900">
+        <span class="absolute inset-y-0 right-0 flex items-center pr-2.5 text-slate-400">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        </span>
+        <button type="button" id="btn-clear-mobile-search" class="absolute inset-y-0 left-0 flex items-center pl-2.5 text-slate-400 hover:text-slate-600 hidden text-xs">
+          ✕
+        </button>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-4 space-y-3 sm:space-y-3.5">
+      
+      <!-- Dedicated Semantic Audit & Diagnostics Bar (Visually distinct from groups) -->
+      <div id="audit-filters-bar" class="bg-slate-100/70 dark:bg-slate-900/70 p-2 rounded-xl border border-slate-200/90 dark:border-slate-800 shadow-2xs">
+        <!-- Rendered dynamically via ui.js renderStats() -->
+      </div>
+
+      <!-- Compact Subtitle & Controls Bar -->
+      <div class="flex flex-wrap items-center justify-between gap-2.5 text-xs text-slate-500 px-1">
+        <div class="flex items-center gap-3">
+          <span>إجمالي السجلات: <strong id="stat-total" class="font-mono text-slate-900 dark:text-white font-bold">0</strong></span>
+        </div>
+        
+        <!-- Controls: View Mode (Table/Cards) & Sort Selector -->
+        <div class="flex items-center gap-2 flex-wrap">
+          <!-- View Mode Toggle (Table vs Mobile Cards) -->
+          <div class="inline-flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
+            <button type="button" id="btn-view-table" class="px-2 py-1 rounded-md text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs" title="عرض جدولي">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 4h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+              <span class="hidden xs:inline">جدول</span>
+            </button>
+            <button type="button" id="btn-view-cards" class="px-2 py-1 rounded-md text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white flex items-center gap-1 transition-colors cursor-pointer" title="عرض بطاقات / كروت مناسبة للهاتف">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+              <span class="hidden xs:inline">بطاقات</span>
+            </button>
+          </div>
+
+          <!-- Column Filter Dropdown (Show/Hide Table Columns) -->
+          <div class="relative" id="column-filter-container">
+            <button type="button" id="btn-column-filter" class="px-2 py-1 rounded-md text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/60 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs" title="تخصيص الأعمدة المعروضة في الجدول">
+              <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/></svg>
+              <span>الأعمدة</span>
+              <span id="columns-count-badge" class="font-mono text-[10px] px-1 py-0.2 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">7</span>
+            </button>
+            <div id="column-filter-menu" class="hidden absolute left-0 mt-1.5 w-52 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl p-2 z-50 text-xs">
+              <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-100 dark:border-slate-800 text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                <span>تخصيص أعمدة الجدول</span>
+                <button type="button" id="btn-reset-columns" class="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline font-normal cursor-pointer">إظهار الكل</button>
+              </div>
+              <div id="column-checkboxes-list" class="space-y-1">
+                <!-- Dynamically populated via ui.js -->
+              </div>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-1.5">
+            <label for="sort-select" class="text-[11px] text-slate-400 whitespace-nowrap hidden sm:inline">الترتيب:</label>
+            <select id="sort-select" class="text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-900 cursor-pointer max-w-[170px] sm:max-w-none truncate">
+              <option value="default_church_sort">الافتراضي (ذكور ثم إناث - الأكبر للأصغر)</option>
+              <option value="name_asc">الاسم الكامل (أ - ي)</option>
+              <option value="name_desc">الاسم الكامل (ي - أ)</option>
+              <option value="dob_asc">السن (الأكبر سناً أولاً)</option>
+              <option value="dob_desc">السن (الأصغر سناً أولاً)</option>
+              <option value="education_asc">المؤهل الدراسي</option>
+              <option value="serviceType_asc">نوع الخدمة</option>
+              <option value="gender_asc">النوع (ذكور أولاً)</option>
+              <option value="gender_desc">النوع (إناث أولاً)</option>
+              <option value="lastUpdated_desc">آخر تحديث (الأحدث أولاً)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+
+
+      <!-- Sequential Groups Container (Scroll through all groups naturally) -->
+      <div id="members-container" class="space-y-6">
+        <!-- Rendered dynamically via ui.js with sequential group tables -->
+      </div>
+
+      <!-- Empty State -->
+      <div id="empty-state" class="hidden text-center py-16 px-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+        <h3 class="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1">لا توجد نتائج مطابقة</h3>
+        <p class="text-xs text-slate-500 mb-3">جرب تغيير كلمات البحث للوصول للسجلات المطلوبة.</p>
+        <button type="button" id="btn-empty-clear" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800">
+          مسح البحث
+        </button>
+      </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 mt-auto py-3 text-center text-xs text-slate-500">
+      <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+        <div>كنيسة القديس أثناسيوس الرسولي © 2026</div>
+        <div class="flex items-center gap-3 text-slate-400 text-[11px]">
+          <span>[Ctrl+S] للحفظ</span>
+          <span>[Ctrl+P] للطباعة</span>
+          <span>[Ctrl+F] للبحث</span>
+        </div>
+      </div>
+    </footer>
+
+    <!-- Floating Action Banner for Unsaved Changes -->
+    <aside id="floating-unsaved-bar" class="hidden fixed bottom-3 sm:bottom-6 inset-x-2 sm:inset-x-4 max-w-2xl mx-auto z-40 transform transition-transform duration-300 translate-y-24">
+      <div class="bg-slate-900 text-white rounded-xl p-2.5 sm:p-3.5 shadow-2xl border border-slate-700 flex flex-wrap items-center justify-between gap-2.5">
+        <div class="flex items-center gap-2.5">
+          <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
+          <div class="text-xs">
+            <strong>توجد <span id="floating-unsaved-count" class="font-mono text-amber-300 font-bold">0</span> تعديلات غير محفوظة</strong>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <!-- Button to view only edited rows -->
+          <button type="button" id="btn-toggle-edited-only" class="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer" title="عرض السجلات التي تم تعديلها أو إضافتها فقط">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+            <span id="btn-toggle-edited-text">عرض المعدلة فقط</span>
+          </button>
+          <button type="button" id="btn-discard-floating" class="px-2 sm:px-2.5 py-1.5 rounded text-xs text-slate-300 hover:text-white cursor-pointer" title="التراجع عن كافة التعديلات غير المحفوظة">
+            تراجع عن الكل
+          </button>
+          <button type="button" id="btn-save-floating" class="px-3 sm:px-4 py-1.5 rounded-lg text-xs font-bold bg-white text-slate-900 hover:bg-slate-100 shadow-xs cursor-pointer flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            <span>حفظ وتنزيل التعديلات</span>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+  </div>
+
+  <!-- Redesigned Clean & Simple Add / Edit Modal -->
+  <div id="member-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xs overflow-y-auto">
+    <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden my-auto">
+      
+      <!-- Modal Header -->
+      <div class="px-5 py-3.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
+        <h2 id="modal-title" class="text-sm font-bold text-slate-900 dark:text-white">إضافة عضو جديد</h2>
+        <button type="button" id="btn-close-modal" class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-sm">
+          ✕
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <form id="member-form" class="p-5 overflow-y-auto space-y-3.5 text-xs">
+        <input type="hidden" id="member-id">
+        <input type="hidden" id="selected-groups-json" value="[]">
+
+        <!-- Full Name -->
+        <div>
+          <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">الاسم الكامل *</label>
+          <input type="text" id="member-name" required placeholder="مثال: أبانوب رمسيس" class="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-900">
+        </div>
+
+        <!-- Groups Multi-Select (Can stay in many groups contemporarily) -->
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="block font-semibold text-slate-700 dark:text-slate-300">
+              المجموعات التابع لها <span class="font-normal text-slate-400 text-[11px]">(يمكن اختيار أكثر من مجموعة)</span>
+            </label>
+            <span id="selected-groups-counter" class="text-[11px] text-slate-500 font-mono">0 مجموعات</span>
+          </div>
+          <div id="group-checkboxes-container" class="flex flex-wrap gap-1.5">
+            <!-- Populated via modal.js -->
+          </div>
+        </div>
+
+        <!-- Gender, Marital Status & Date of Birth -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+          <div>
+            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">النوع</label>
+            <select id="member-gender" class="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-900">
+              <option value="Male">ذكر</option>
+              <option value="Female">أنثى</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">الحالة الاجتماعية</label>
+            <select id="member-married" class="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-900">
+              <option value="false">أعزب</option>
+              <option value="true">متزوج</option>
+            </select>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="font-semibold text-slate-700 dark:text-slate-300">تاريخ الميلاد</label>
+              <span id="live-age-preview" class="text-slate-500 font-medium text-[11px]">—</span>
+            </div>
+            <input type="text" id="member-dob" placeholder="DD/MM/YYYY (مثال: 08/11/1994)" class="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono focus:outline-none focus:ring-1 focus:ring-slate-900" dir="ltr">
+          </div>
+        </div>
+
+        <!-- Contemporary Phone Numbers: Personal, Father, and Mother -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+          <div>
+            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">الهاتف الشخصي</label>
+            <input type="text" id="member-phone" placeholder="هاتف العضو" class="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-slate-900" dir="ltr">
+          </div>
+
+          <div>
+            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">هاتف الأب</label>
+            <input type="text" id="member-father-phone" placeholder="هاتف الأب" class="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-slate-900" dir="ltr">
+          </div>
+
+          <div>
+            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">هاتف الأم</label>
+            <input type="text" id="member-mother-phone" placeholder="هاتف الأم" class="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-slate-900" dir="ltr">
+          </div>
+        </div>
+
+        <!-- Education, Service, Family -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+          <div>
+            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">المؤهل / المرحلة</label>
+            <input type="text" id="member-education" placeholder="بكالريوس، ثانوية..." class="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-900">
+          </div>
+
+          <div id="service-type-container">
+            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">نوع الخدمة (للخدام)</label>
+            <input type="text" id="member-service-type" placeholder="كورال، أسرة..." class="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-900">
+          </div>
+
+          <div>
+            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">مع الأسرة (withFamily)</label>
+            <select id="member-family" class="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-900">
+              <option value="">غير محدد</option>
+              <option value="true">نعم (True)</option>
+              <option value="false">لا (False)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Notes -->
+        <div>
+          <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">ملاحظات</label>
+          <input type="text" id="member-notes" placeholder="ملاحظات افتقاد، ذوي احتياجات..." class="w-full px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-900">
+        </div>
+
+        <!-- Actions -->
+        <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+          <div>
+            <button type="button" id="btn-revert-modal-member" class="hidden px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/50 border border-amber-200 dark:border-amber-900/60 cursor-pointer" title="تراجع عن تعديل هذا العضو واستعادة بياناته الأصلية">
+              تراجع عن تعديل هذا العضو
+            </button>
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="button" id="btn-cancel-modal" class="px-3.5 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+              إلغاء
+            </button>
+            <button type="submit" class="px-4 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold">
+              حفظ السجل
+            </button>
+          </div>
+        </div>
+
+      </form>
+
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div id="delete-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xs">
+    <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xl w-full max-w-sm p-4 space-y-3">
+      <h3 class="text-sm font-bold text-slate-900 dark:text-white">تأكيد حذف العضو</h3>
+      <p class="text-xs text-slate-600 dark:text-slate-400">
+        هل أنت متأكد من حذف: <strong id="delete-member-name" class="text-slate-900 dark:text-white">...</strong> ؟
+      </p>
+      <div id="delete-member-details" class="text-[11px] text-slate-400">...</div>
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+        <button type="button" id="btn-cancel-delete" class="px-3 py-1.5 rounded-lg text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100">
+          إلغاء
+        </button>
+        <button type="button" id="btn-confirm-delete" class="px-3 py-1.5 rounded-lg text-xs bg-rose-600 hover:bg-rose-700 text-white font-semibold">
+          تأكيد الحذف
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Create New Church Group -->
+  <div id="new-group-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xs">
+    <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-md p-5 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+        <h3 id="new-group-modal-title" class="text-sm font-bold text-slate-900 dark:text-white">إنشاء مجموعة خدمة أو فصل مدارس أحد</h3>
+        <button type="button" id="btn-close-new-group-modal" class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs">
+          ✕
+        </button>
+      </div>
+      <form id="new-group-form" class="space-y-3.5 text-xs">
+        <!-- Semantic Type Selection -->
+        <div>
+          <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1.5">نوع الكيان / التصنيف</label>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+              <input type="radio" name="new-group-type" value="service" id="new-group-type-service" checked class="text-slate-900 focus:ring-0">
+              <span class="font-bold text-slate-800 dark:text-slate-200">مجموعة ومرحلة خدمة</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+              <input type="radio" name="new-group-type" value="sunday_school" id="new-group-type-sunday" class="text-slate-900 focus:ring-0">
+              <span class="font-bold text-slate-800 dark:text-slate-200">فصل مدارس أحد</span>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label id="new-group-name-label" class="block font-bold text-slate-700 dark:text-slate-300 mb-1">اسم المجموعة / الفصل <span class="text-rose-500">*</span></label>
+          <input type="text" id="new-group-name-input" placeholder="مثال: فصل أولى ابتدائي، شباب جامعيين..." class="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-900" required>
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1.5">لون التمييز والجدول</label>
+          <div id="new-group-color-presets" class="grid grid-cols-6 gap-2">
+            <!-- Preset swatches -->
+          </div>
+          <input type="hidden" id="new-group-selected-color" value="indigo">
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+          <button type="button" id="btn-cancel-new-group" class="px-3.5 py-1.5 rounded-lg text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+            إلغاء
+          </button>
+          <button type="submit" id="btn-submit-new-group" class="px-4 py-1.5 rounded-lg text-xs bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 font-semibold shadow-xs">
+            إنشاء وحفظ
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Add Multiple Existing Members to Group -->
+  <div id="add-existing-members-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xs">
+    <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col overflow-hidden">
+      
+      <!-- Header -->
+      <div class="px-5 py-3.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
+        <div>
+          <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+            <span id="target-group-action-label">إضافة أعضاء حاليين إلى:</span>
+            <span id="target-group-title" class="text-indigo-600 dark:text-indigo-400 underline font-mono"></span>
+          </h3>
+          <p id="target-group-subtitle" class="text-[11px] text-slate-500 mt-0.5">حدد الأعضاء من قاعدة البيانات لإضافتهم لهذه المجموعة</p>
+        </div>
+        <button type="button" id="btn-close-add-existing-modal" class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-sm">
+          ✕
+        </button>
+      </div>
+
+      <!-- Search & Bulk Selection Bar -->
+      <div class="p-2.5 sm:p-3 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-wrap items-center justify-between gap-2 sm:gap-3 text-xs">
+        <div class="relative flex-1 min-w-[200px]">
+          <input type="text" id="existing-member-search" placeholder="بحث بالاسم أو الهاتف في قائمة الأعضاء..." class="w-full pr-8 pl-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs">
+          <span class="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none text-slate-400">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          </span>
+        </div>
+        <div class="flex items-center gap-1.5 sm:gap-2 whitespace-nowrap">
+          <button type="button" id="btn-select-all-existing" class="px-2 py-1 rounded text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 cursor-pointer">
+            تحديد الكل
+          </button>
+          <button type="button" id="btn-clear-all-existing" class="px-2 py-1 rounded text-[11px] text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">
+            إلغاء التحديد
+          </button>
+        </div>
+      </div>
+
+      <!-- Members List -->
+      <div id="existing-members-list" class="flex-1 overflow-y-auto p-3 divide-y divide-slate-100 dark:divide-slate-800/80 space-y-1 text-xs max-h-96">
+        <!-- Dynamically generated selectable items with name, phones, and current groups -->
+      </div>
+
+      <!-- Footer -->
+      <div class="p-3 sm:p-3.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div>
+          <span>تم اختيار: <strong id="selected-existing-count" class="font-mono text-indigo-600 dark:text-indigo-400 font-bold">0</strong> عضو</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button type="button" id="btn-cancel-add-existing" class="px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer">
+            إلغاء
+          </button>
+          <button type="button" id="btn-confirm-add-existing" class="px-3.5 sm:px-4 py-1.5 rounded-lg font-bold bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 shadow-xs cursor-pointer">
+            إضافة الأعضاء للمجموعة
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Floating Color Picker Popover for Church Groups -->
+  <div id="color-picker-popover" class="hidden fixed z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-3 w-60 text-xs select-none">
+    <div class="flex items-center justify-between pb-2 mb-2.5 border-b border-slate-100 dark:border-slate-800">
+      <div class="flex items-center gap-2 font-bold text-slate-800 dark:text-slate-200">
+        <span class="w-3 h-3 rounded-full shadow-xs border border-slate-300 dark:border-slate-600" id="color-picker-current-dot"></span>
+        <span id="color-picker-group-name" class="truncate max-w-[130px] text-xs">لون المجموعة</span>
+      </div>
+      <button type="button" id="btn-close-color-picker" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 text-xs leading-none rounded hover:bg-slate-100 dark:hover:bg-slate-800" title="إغلاق">
+        ✕
+      </button>
+    </div>
+    
+    <div class="text-[11px] text-slate-500 dark:text-slate-400 mb-2 font-medium">الأنماط اللونية المتاحة:</div>
+    <div id="color-picker-presets" class="grid grid-cols-4 gap-2 mb-3">
+      <!-- Injected via ui.js -->
+    </div>
+    
+    <div class="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+      <label for="custom-group-color-input" class="text-[11px] text-slate-600 dark:text-slate-400 font-medium">لون مخصص (Custom):</label>
+      <input type="color" id="custom-group-color-input" class="w-7 h-7 rounded border border-slate-300 dark:border-slate-700 cursor-pointer bg-transparent">
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toast-container" class="fixed bottom-5 left-5 z-50 flex flex-col gap-1.5 max-w-sm pointer-events-none"></div>
+
+  <!-- Fullscreen Drag and Drop Overlay for uploading JSON file securely -->
+  <div id="drag-drop-overlay" class="hidden fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4 select-none pointer-events-none transition-all">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl border-2 border-dashed border-indigo-500 p-8 max-w-md text-center shadow-2xl">
+      <div class="w-16 h-16 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 mx-auto flex items-center justify-center mb-4 animate-bounce">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+      </div>
+      <h3 class="text-base font-bold text-slate-900 dark:text-white mb-1">أفلت ملف البيانات هنا لفتحه</h3>
+      <p class="text-xs text-slate-500 dark:text-slate-400">سيتم فتح الملف محلياً داخل متصفحك بسرية تامة بنسبة 100% دون إرسال أي بيانات لخوادم خارجية.</p>
+    </div>
+  </div>
+
+  <script type="module" src="./js/app.js"></script>
+
+</body>
+</html>
