@@ -24,7 +24,7 @@ function loadCols() {
 
 // Page state lives for the whole session, so coming back to the page keeps your choices.
 const P = {
-  mode: 'all', groups: new Set(), custom: new Set(), q: '', split: false, pageBreak: false,
+  mode: 'all', groups: new Set(), excl: new Set(), custom: new Set(), q: '', split: false, pageBreak: false,
   alias: {}, // groupId -> name to print instead of the saved group name
   rate: new Set(), showCounts: false, // courses whose attendance is printed as columns
   title: '', subtitle: '', logo: true, numbers: true, sign: 'أمين الخدمة، الأب الكاهن',
@@ -99,9 +99,10 @@ function sections() {
   if (P.mode === 'custom') return [{ title: '', members: db.members.filter((m) => P.custom.has(m.id)).sort(cmp) }];
   if (P.mode === 'group') {
     const gs = db.groups.filter((g) => P.groups.has(g.id));
-    if (P.split) return gs.map((g) => ({ title: disp(g), members: db.members.filter((m) => m.groups.includes(g.id)).sort(cmp) }));
+    const keep = (m) => !P.excl.has(m.id);
+    if (P.split) return gs.map((g) => ({ title: disp(g), members: db.members.filter((m) => keep(m) && m.groups.includes(g.id)).sort(cmp) }));
     const set = new Set(gs.map((g) => g.id));
-    return [{ title: '', members: db.members.filter((m) => m.groups.some((id) => set.has(id))).sort(cmp) }];
+    return [{ title: '', members: db.members.filter((m) => keep(m) && m.groups.some((id) => set.has(id))).sort(cmp) }];
   }
   return [{ title: '', members: [...db.members].sort(cmp) }];
 }
@@ -232,8 +233,28 @@ export function viewPrint(view) {
         ${picked.length ? `<div class="ps-sub"><div class="f2">الاسم الذي يظهر في الطباعة</div>${picked.map((g) => `<input type="text" class="alias" data-alias="${g.id}" value="${esc(P.alias[g.id] || '')}" placeholder="${esc(g.name)}" aria-label="اسم ${esc(g.name)} في الطباعة">`).join('')}
           <div class="muted small">اتركه فارغاً لاستخدام الاسم المحفوظ. التعديل هنا للطباعة فقط ولا يغيّر اسم المجموعة.</div></div>` : ''}
         ${suggest.map((g) => `<button type="button" class="btn sm block-sm" data-addrate="${g.id}" style="margin-top:8px">${ic('chart', 'sm')}إضافة نسبة الحضور — ${esc(disp(g))}</button>`).join('')}
+        ${picked.length ? `<div class="ps-sub"><div class="f2">استثناء أسماء <span class="muted">(ألغِ التحديد لإخراج اسم من الكشف)</span></div>
+          <div class="toolbar" style="margin:6px 0"><button class="btn sm" id="p-exall">تحديد الكل</button><button class="btn sm" id="p-exnone">إلغاء الكل</button><span class="muted small num" id="p-excount" style="margin-inline-start:auto"></span></div>
+          <div class="panel checklist pick-box" id="p-exlist"></div></div>` : ''}
         <label class="chk" style="margin-top:12px"><input type="checkbox" id="p-split" ${P.split ? 'checked' : ''}> تقسيم القائمة إلى أقسام حسب المجموعة</label>
         <label class="chk ${P.split ? '' : 'off'}"><input type="checkbox" id="p-break" ${P.pageBreak ? 'checked' : ''} ${P.split ? '' : 'disabled'}> كل قسم في صفحة منفصلة</label>`;
+      if (picked.length) {
+        const gset = new Set(picked.map((g) => g.id));
+        const pool = db.members.filter((m) => m.groups.some((id) => gset.has(id))).sort(byName);
+        const drawEx = () => {
+          $('#p-exlist', host).innerHTML = pool.map((m) => `<div class="item ${P.excl.has(m.id) ? '' : 'on'}" data-id="${m.id}"><span class="checkbox">${ic('check')}</span><span class="nm">${esc(m.name)}</span></div>`).join('');
+          const n = pool.filter((m) => P.excl.has(m.id)).length;
+          $('#p-excount', host).textContent = n ? `مستثنى: ${n} من ${pool.length}` : `الكل (${pool.length})`;
+        };
+        drawEx();
+        $('#p-exlist', host).addEventListener('click', (e) => {
+          const r = e.target.closest('[data-id]'); if (!r) return;
+          P.excl.has(r.dataset.id) ? P.excl.delete(r.dataset.id) : P.excl.add(r.dataset.id);
+          drawEx(); drawSheet();
+        });
+        $('#p-exall', host).onclick = () => { pool.forEach((m) => P.excl.delete(m.id)); drawEx(); drawSheet(); };
+        $('#p-exnone', host).onclick = () => { pool.forEach((m) => P.excl.add(m.id)); drawEx(); drawSheet(); };
+      }
       $$('[data-g]', host).forEach((b) => b.addEventListener('click', () => {
         P.groups.has(b.dataset.g) ? P.groups.delete(b.dataset.g) : P.groups.add(b.dataset.g);
         drawWho(); drawSheet();

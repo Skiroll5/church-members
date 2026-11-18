@@ -614,17 +614,17 @@ function memberModal(id, presetGroup) {
           <div class="field"><label class="f" for="f-father">هاتف الأب</label><input type="tel" id="f-father" dir="ltr" style="text-align:right" value="${v('fatherPhone')}"></div>
           <div class="field"><label class="f" for="f-mother">هاتف الأم</label><input type="tel" id="f-mother" dir="ltr" style="text-align:right" value="${v('motherPhone')}"></div>
         </div>`)}
-      ${sec(3, 'الكورسات والمجموعات', `
-        ${courses.length ? `<div class="field"><label class="f">الكورسات</label><div class="tags" id="f-courses">${tags(courses)}</div></div>` : ''}
-        ${groups.length ? `<div class="field" style="margin-bottom:0"><label class="f">المجموعات</label><div class="tags" id="f-groups">${tags(groups)}</div></div>` : ''}
-        ${!db.groups.length ? '<p class="muted small">لا توجد كورسات أو مجموعات بعد — أنشئها من صفحة «الكورسات والمجموعات».</p>' : ''}`)}
-      ${sec(4, 'الدراسة والخدمة', `
+      ${sec(3, 'الدراسة والخدمة', `
         <div class="grid3">
           <div class="field"><label class="f" for="f-edu">المؤهل / الدراسة</label><input type="text" id="f-edu" value="${v('education')}"></div>
           <div class="field"><label class="f" for="f-service">نوع الخدمة</label><input type="text" id="f-service" value="${v('serviceType')}"></div>
           <div class="field"><label class="f">يعيش مع الأسرة؟</label>${seg('family', [['yes', 'نعم'], ['no', 'لا'], ['unk', 'غير محدد']])}</div>
         </div>`)}
-      ${sec(5, 'ملاحظات', `<textarea id="f-notes" placeholder="ملاحظات افتقاد، ظروف خاصة...">${v('notes')}</textarea>`)}
+      ${sec(4, 'ملاحظات', `<textarea id="f-notes" placeholder="ملاحظات افتقاد، ظروف خاصة...">${v('notes')}</textarea>`)}
+      ${sec(5, 'الكورسات والمجموعات', `
+        ${courses.length ? `<div class="field"><label class="f">الكورسات</label><div class="tags" id="f-courses">${tags(courses)}</div></div>` : ''}
+        ${groups.length ? `<div class="field" style="margin-bottom:0"><label class="f">المجموعات</label><div class="tags" id="f-groups">${tags(groups)}</div></div>` : ''}
+        ${!db.groups.length ? '<p class="muted small">لا توجد كورسات أو مجموعات بعد — أنشئها من صفحة «الكورسات والمجموعات».</p>' : ''}`)}
       ${rep.length ? sec(6, 'سجل الحضور', `<div class="panel">${rep.map((r) => `<div class="setting" style="padding:10px 14px">
         <span class="dot c-${esc(r.group.color)}"></span><div class="tx"><b>${esc(r.group.name)}</b><p class="num">حضر ${r.attended} من ${r.total} جلسة</p></div>
         <span class="pips">${r.dots.map((d) => `<i class="${d ? 'on' : ''}"></i>`).join('')}</span><span class="pct ${pctClass(r.pct)}">${pctText(r.pct)}</span></div>`).join('')}</div>`) : ''}
