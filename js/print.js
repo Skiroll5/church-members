@@ -28,7 +28,7 @@ const P = {
   alias: {}, // groupId -> name to print instead of the saved group name
   rate: new Set(), showCounts: false, // courses whose attendance is printed as columns
   title: '', subtitle: '', logo: true, numbers: true, banded: false, sign: 'أمين الخدمة، الأب الكاهن',
-  orient: 'portrait', size: 'md', sort: 'name', cols: loadCols(),
+  orient: 'portrait', size: 'md', sort: 'name', sortDir: 1, cols: loadCols(),
 };
 // Only the ordinary columns are remembered between visits; attendance columns depend on the chosen courses.
 const saveCols = () => {
@@ -82,14 +82,28 @@ const isNumCol = (k) => isDyn(k) || (COL[k] && COL[k].num);
 
 const activeCols = () => P.cols.order.filter((k) => P.cols.on.has(k));
 
+/** Sort by any column (ordinary or attendance); P.sortDir is 1 (ascending) or -1. Empty values always go last. */
 function sorter() {
-  if (P.sort === 'rate') {
-    const id = [...P.rate][0];
-    if (id && RM[id]) return (a, b) => ((RM[id].map.get(b.id)?.pct ?? -1) - (RM[id].map.get(a.id)?.pct ?? -1)) || byName(a, b);
-  }
-  if (P.sort === 'age') return (a, b) => (ageOf(b.dob) ?? -1) - (ageOf(a.dob) ?? -1) || byName(a, b);
-  if (P.sort === 'gender') return (a, b) => (a.gender === 'Female') - (b.gender === 'Female') || byName(a, b);
-  return byName;
+  const k = DEFAULT_ORDER.includes(P.sort) || (isDyn(P.sort) && P.cols.order.includes(P.sort)) ? P.sort : 'name';
+  if (k === 'name') return P.sortDir < 0 ? (a, b) => byName(b, a) : byName;
+  const dobKey = (m) => { const p = String(m.dob || '').split(/[/\-.]/).map(Number); return p.length === 3 && p[2] ? p[2] * 10000 + p[1] * 100 + p[0] : null; };
+  const val = (m) => {
+    if (isDyn(k)) {
+      const [t, id] = k.split(':'); const r = RM[id] && RM[id].map.get(m.id);
+      return !r ? null : t === 'rate' ? r.pct : r.attended;
+    }
+    if (k === 'age') return ageOf(m.dob) ?? null;
+    if (k === 'dob') return dobKey(m);
+    if (k === 'gender') return m.gender === 'Female' ? 1 : 0;
+    if (k === 'updatedAt') return m.updatedAt ? Date.parse(m.updatedAt) : null;
+    const t = colText(k, m); return t === '' ? null : t;
+  };
+  return (a, b) => {
+    const x = val(a), y = val(b);
+    if (x == null || y == null) return (x == null) - (y == null) || byName(a, b);
+    const c = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'ar', { numeric: true });
+    return c * P.sortDir || byName(a, b);
+  };
 }
 
 /** The people to print, as one or more titled sections. */
@@ -179,7 +193,7 @@ export function viewPrint(view) {
           <div class="field"><label class="f">اتجاه الصفحة</label><div class="seg" id="p-orient"><button data-v="portrait">عمودي</button><button data-v="landscape">أفقي</button></div></div>
           <div class="field"><label class="f">حجم الخط</label><div class="seg" id="p-size"><button data-v="sm">صغير</button><button data-v="md">متوسط</button><button data-v="lg">كبير</button></div></div>
         </div>
-        <div class="field"><label class="f" for="p-sort">الترتيب</label><select id="p-sort"><option value="name">حسب الاسم</option><option value="age">حسب السن (الأكبر أولاً)</option><option value="gender">ذكور ثم إناث</option><option value="rate">حسب نسبة الحضور (الأعلى أولاً)</option></select></div>
+        <div class="field"><label class="f" for="p-sort">الترتيب حسب</label><div style="display:flex;gap:8px"><select id="p-sort" style="flex:1"></select><button type="button" class="btn" id="p-sortdir" title="عكس الاتجاه" aria-label="عكس الاتجاه"></button></div></div>
         <label class="chk"><input type="checkbox" id="p-logo"> إظهار شعار الكنيسة</label>
         <label class="chk"><input type="checkbox" id="p-banded"> تلوين الصفوف بالتناوب</label>
       </section>
@@ -288,7 +302,17 @@ export function viewPrint(view) {
   };
 
   /* --- columns: shown ones (ordered) + the rest to add --- */
+  // Sort choices = every column (shown or not), so the list can be ordered by anything.
+  const drawSort = () => {
+    syncRateCols();
+    if (!P.cols.order.includes(P.sort)) P.sort = 'name';
+    const el = $('#p-sort', view);
+    el.innerHTML = P.cols.order.map((k) => `<option value="${esc(k)}">${esc(LABEL(k))}</option>`).join('');
+    el.value = P.sort;
+    $('#p-sortdir', view).textContent = P.sortDir > 0 ? 'تصاعدي ▲' : 'تنازلي ▼';
+  };
   const drawCols = () => {
+    drawSort();
     const act = activeCols();
     const rest = P.cols.order.filter((k) => !P.cols.on.has(k));
     $('#p-active', view).innerHTML = act.map((k, i) => `<span class="cchip">
@@ -338,7 +362,8 @@ export function viewPrint(view) {
     el[type === 'checked' ? 'checked' : 'value'] = P[key];
     el.addEventListener(type === 'checked' ? 'change' : 'input', () => { P[key] = type === 'checked' ? el.checked : el.value; drawSheet(); });
   };
-  bind('#p-sub', 'subtitle'); bind('#p-sign', 'sign'); bind('#p-sort', 'sort');
+  bind('#p-sub', 'subtitle'); bind('#p-sign', 'sign'); $('#p-sort', view).addEventListener('change', (e) => { P.sort = e.target.value; drawSheet(); });
+  $('#p-sortdir', view).onclick = () => { P.sortDir = -P.sortDir; drawSort(); drawSheet(); };
   bind('#p-logo', 'logo', 'checked'); bind('#p-banded', 'banded', 'checked'); bind('#p-numbers', 'numbers', 'checked');
   // Title: shows the automatic title until you type your own; clearing it (or the button) goes back to automatic.
   $('#p-title', view).value = P.title || autoTitle();

@@ -359,3 +359,16 @@ input.invalid { border-color: var(--bad); }
 @media (max-width: 640px) { .mv-grid { grid-template-columns: 1fr; } .mv-grid .arrow { display: none; } }
 .checklist .item .pend-undo, td .pend-undo { margin-inline-start: 8px; }
 .checklist .item .pend-badge { flex: none; }
+
+/* Row numbers: display only (CSS counters), never saved and not tied to any person */
+.table tbody, table.matrix tbody { counter-reset: rn; }
+.table tbody tr, table.matrix tbody tr { counter-increment: rn; }
+.table tbody tr > :first-child:not(:has(> .who))::before,
+.table tbody tr > :first-child > .who::before,
+table.matrix tbody tr > :first-child::before {
+  content: counter(rn); display: inline-block; flex: none; min-width: 26px; margin-inline-end: 10px; text-align: center;
+  font-size: 12px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.table thead th:first-child::before, table.matrix thead th:first-child::before {
+  content: '#'; display: inline-block; min-width: 26px; margin-inline-end: 10px; text-align: center; font-weight: 600;
+}
