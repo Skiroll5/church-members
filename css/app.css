@@ -343,3 +343,19 @@ input.invalid { border-color: var(--bad); }
 .mvb:hover:not(:disabled) { background: rgba(30, 64, 175, .12); }
 .mvb:disabled { opacity: .25; cursor: default; }
 .mvb.rm { color: var(--bad); }
+
+/* pending (unconfirmed) member changes + bulk move */
+.table tr.pending td { background: color-mix(in srgb, #f59e0b 9%, transparent); }
+.table tr.pending td:first-child { box-shadow: inset 3px 0 0 #f59e0b; }
+.who { flex-wrap: wrap; }
+.pend-badge { font-size: 11px; font-weight: 700; color: #92400e; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+.pend-undo { margin-inline-start: auto; }
+.mv-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: end; }
+.mv-grid .arrow { padding-bottom: 10px; color: var(--muted); }
+.mv-list .item .sub { margin-inline-start: auto; display: flex; gap: 8px; align-items: center; }
+.mv-list { max-height: 55vh; overflow: auto; }
+.mv-ages { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.mv-ages input { width: 80px; }
+@media (max-width: 640px) { .mv-grid { grid-template-columns: 1fr; } .mv-grid .arrow { display: none; } }
+.checklist .item .pend-undo, td .pend-undo { margin-inline-start: 8px; }
+.checklist .item .pend-badge { flex: none; }

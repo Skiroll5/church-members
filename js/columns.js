@@ -1,7 +1,7 @@
 /**
  * columns.js - one registry of member columns, shared by the members table, the course roster and the print sheet.
  */
-import { getGroup, ageOf } from './store.js';
+import { getGroup, ageOf, pendingOf } from './store.js';
 import { esc, groupTag } from './ui.js';
 
 const yesNo = (v) => (v === true ? 'نعم' : v === false ? 'لا' : '');
@@ -34,6 +34,13 @@ export const colCell = (key, m) => {
   if (!t) return '<span class="muted">—</span>';
   return c.num ? `<span class="phone num">${esc(t)}</span>` : esc(t);
 };
+
+/** Badge + discard button shown next to a person's name in any row, when they have unconfirmed changes. */
+export function pendTag(m) {
+  const pd = pendingOf(m);
+  if (!pd) return '';
+  return `<span class="pend-badge">${pd === 'new' ? 'جديد · غير مؤكد' : 'تعديل معلّق'}</span><button type="button" class="btn sm quiet pend-undo" data-discard="${esc(m.id)}" title="تجاهل تعديلات ${esc(m.name)}">${pd === 'new' ? 'حذف' : 'تجاهل التعديل'}</button>`;
+}
 
 /* ----- remembered choice of visible columns (a display preference only, not member data) ----- */
 const DEFAULT_VISIBLE = ['groups', 'age', 'phone'];

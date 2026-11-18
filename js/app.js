@@ -8,20 +8,20 @@ import {
   adoptDraft, discardDraft, markConfirmed, importData, replaceAll,
   today, getMember, getGroup, getSession, isCourse, rosterOf, sessionsOf, ageOf, birthdayOf,
   saveMember, deleteMember, saveGroup, deleteGroup, setMembership, createSession, deleteSession,
-  courseReport, memberReport,
+  courseReport, memberReport, pendingOf, discardMemberChanges,
 } from './store.js';
 import {
   $, $$, esc, byName, norm, pctClass, pctText, fmtDate, shortDate, WEEKDAYS, MONTHS, ic, toast, openModal, confirmBox,
   popover, groupTag, bar, meter, emptyState, head, crumb, download, downloadCsv,
 } from './ui.js';
-import { COLS, colCell, colText, visibleColumns, setVisibleColumns, resetVisibleColumns } from './columns.js';
+import { COLS, colCell, colText, pendTag, visibleColumns, setVisibleColumns, resetVisibleColumns } from './columns.js';
 import { viewPrint } from './print.js';
 
 const view = $('#view');
 
 const NAV = [
   ['home', 'الرئيسية', 'home', '#/'], ['groups', 'الكورسات والمجموعات', 'book', '#/groups'], ['members', 'الأعضاء', 'users', '#/members'],
-  ['birthdays', 'أعياد الميلاد', 'gift', '#/birthdays'], ['print', 'طباعة وتصدير', 'printer', '#/print'], ['data', 'البيانات', 'database', '#/data'],
+  ['birthdays', 'أعياد الميلاد', 'gift', '#/birthdays'], ['move', 'نقل جماعي', 'users', '#/move'], ['print', 'طباعة وتصدير', 'printer', '#/print'], ['data', 'البيانات', 'database', '#/data'],
 ];
 $('#nav-links').innerHTML = NAV.map(([k, label, icon, href]) => `<a href="${href}" data-nav="${k}">${ic(icon)}<span>${label}</span></a>`).join('');
 
@@ -37,9 +37,9 @@ function memberTable(list, { cols, remove = null, sort = null } = {}) {
     return `<th aria-sort="${on ? (sort.dir > 0 ? 'ascending' : 'descending') : 'none'}"><button type="button" class="thsort ${on ? 'on' : ''}" data-sort="${esc(k)}">${esc(text)}<span class="arr">${on ? (sort.dir > 0 ? '▲' : '▼') : '↕'}</span></button></th>`;
   };
   return `<div class="table-wrap"><table class="table members"><thead><tr>${th('name', 'الاسم')}${cols.map((k) => th(k, label(k))).join('')}${remove ? '<th></th>' : ''}</tr></thead><tbody>
-    ${list.map((m) => `<tr data-member="${m.id}" tabindex="0"><td><div class="who"><span class="avatar">${esc((m.name || '؟').trim().charAt(0).toUpperCase())}</span><div class="nm">${esc(m.name)}</div></div></td>
+    ${list.map((m) => { const pd = pendingOf(m); return `<tr data-member="${m.id}" tabindex="0" class="${pd ? 'pending' : ''}"><td><div class="who"><span class="avatar">${esc((m.name || '؟').trim().charAt(0).toUpperCase())}</span><div class="nm">${esc(m.name)}</div>${pendTag(m)}</div></td>
       ${cols.map((k) => `<td>${colCell(k, m)}</td>`).join('')}
-      ${remove ? `<td class="shrink end"><button class="btn quiet icon sm" data-remove="${m.id}" title="${esc(remove)}" aria-label="${esc(remove)}">${ic('x', 'sm')}</button></td>` : ''}</tr>`).join('')}
+      ${remove ? `<td class="shrink end"><button class="btn quiet icon sm" data-remove="${m.id}" title="${esc(remove)}" aria-label="${esc(remove)}">${ic('x', 'sm')}</button></td>` : ''}</tr>`; }).join('')}
     </tbody></table></div>`;
 }
 
@@ -132,7 +132,7 @@ function render() {
   const ps = $('#page-style'); if (ps && r.name !== 'print') ps.remove();
   const fn = {
     home: viewHome, groups: viewGroups, group: viewGroup, session: viewSession, members: viewMembers,
-    birthdays: viewBirthdays, print: () => viewPrint(view), data: viewData,
+    birthdays: viewBirthdays, move: viewMove, print: () => viewPrint(view), data: viewData,
   }[r.name] || viewHome;
   const scroll = window.scrollY;
   fn(r);
@@ -225,6 +225,88 @@ const whenLabel = (diff) => (diff === 0 ? 'اليوم' : diff === 1 ? 'غداً'
 
 let bMonth = null;
 let bGroup = 'all';
+/* ---------- bulk move between groups ---------- */
+const MV = { from: '', to: '', sel: new Set(), sort: 'dob', copy: false, min: '', max: '', q: '' };
+
+function viewMove() {
+  if (MV.from && !getGroup(MV.from)) MV.from = '';
+  if (MV.to && !getGroup(MV.to)) MV.to = '';
+  const opts = (cur, extra = '') => `${extra}${db.groups.map((g) => `<option value="${g.id}" ${cur === g.id ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}`;
+  view.innerHTML = `${head({ title: 'نقل جماعي', sub: 'انقل أو انسخ عدة أعضاء من مجموعة إلى أخرى مرة واحدة' })}
+    <div class="panel pad">
+      <div class="mv-grid">
+        <div class="field"><label class="f" for="mv-from">من مجموعة</label><select id="mv-from"><option value="">— اختر —</option>${opts(MV.from)}</select></div>
+        <div class="arrow">${ic('chevron')}</div>
+        <div class="field"><label class="f" for="mv-to">إلى مجموعة</label><select id="mv-to"><option value="">— اختر —</option>${opts(MV.to)}</select></div>
+      </div>
+      <label class="chk"><input type="checkbox" id="mv-copy" ${MV.copy ? 'checked' : ''}> إبقاؤهم في المجموعة الأصلية أيضاً (نسخ بدل النقل)</label>
+    </div>
+    <div class="panel pad" id="mv-body" style="margin-top:12px"></div>`;
+  const body = $('#mv-body', view);
+
+  const draw = () => {
+    if (!MV.from) { body.innerHTML = '<div class="empty">اختر المجموعة التي تريد النقل منها</div>'; return; }
+    const q = norm(MV.q), min = MV.min === '' ? null : +MV.min, max = MV.max === '' ? null : +MV.max;
+    const dobKey = (m) => { const p = String(m.dob || '').split(/[/\-.]/).map(Number); return p.length === 3 && p[2] ? p[2] * 10000 + p[1] * 100 + p[0] : null; };
+    const all = rosterOf(MV.from);
+    // 'dob' = oldest first (earliest date of birth), 'dobDesc' = youngest first; members without a date go last
+    const dir = MV.sort === 'dobDesc' ? -1 : 1;
+    const list = all.filter((m) => !q || norm(m.name).includes(q)).sort((a, b) => {
+      if (MV.sort === 'name') return byName(a, b);
+      const x = dobKey(a), y = dobKey(b);
+      if (x == null || y == null) return (x == null) - (y == null) || byName(a, b);
+      return (x - y) * dir || byName(a, b);
+    });
+    const inTo = (m) => MV.to && m.groups.includes(MV.to);
+    const n = [...MV.sel].filter((id) => all.some((m) => m.id === id)).length;
+    body.innerHTML = `
+      <div class="toolbar" style="margin:0 0 10px"><div class="search">${ic('search')}<input type="search" id="mv-q" placeholder="بحث بالاسم" value="${esc(MV.q)}"></div>
+        <select id="mv-sort" aria-label="الترتيب"><option value="dob">الترتيب: الأكبر سناً أولاً</option><option value="dobDesc">الترتيب: الأصغر سناً أولاً</option><option value="name">الترتيب: بالاسم</option></select></div>
+      <div class="mv-ages" style="margin-bottom:10px"><span class="muted small">تحديد حسب السن:</span>
+        <input type="number" id="mv-min" min="0" max="120" placeholder="من" value="${esc(MV.min)}" aria-label="من سن"><span class="muted small">إلى</span>
+        <input type="number" id="mv-max" min="0" max="120" placeholder="إلى" value="${esc(MV.max)}" aria-label="إلى سن">
+        <button class="btn sm" id="mv-agesel">حدّد هذا النطاق</button>
+        <button class="btn sm" id="mv-all">تحديد كل الظاهر</button><button class="btn sm" id="mv-none">مسح التحديد</button></div>
+      <div class="panel checklist mv-list" id="mv-list">${list.length ? list.map((m) => { const a = ageOf(m.dob); return `<div class="item ${MV.sel.has(m.id) ? 'on' : ''}" data-id="${m.id}" tabindex="0"><span class="checkbox">${ic('check')}</span><span class="nm">${esc(m.name)}</span>${pendTag(m)}<span class="sub">${inTo(m) ? '<span class="muted small">موجود في الوجهة</span>' : ''}<span class="muted small num">${m.dob ? esc(m.dob) : 'بدون تاريخ ميلاد'}${a != null ? ` · ${a} سنة` : ''}</span></span></div>`; }).join('') : '<div class="empty">لا توجد نتائج</div>'}</div>
+      <div class="toolbar" style="margin:12px 0 0"><span class="muted small num" id="mv-count">المحدد: ${n} من ${all.length}</span><span class="sp" style="flex:1"></span>
+        <button class="btn primary" id="mv-go" ${n && MV.to && MV.to !== MV.from ? '' : 'disabled'}>${MV.copy ? 'نسخ' : 'نقل'} ${n} إلى المجموعة الأخرى</button></div>`;
+    $('#mv-sort', body).value = MV.sort === 'dob' || MV.sort === 'dobDesc' || MV.sort === 'name' ? MV.sort : 'dob';
+    const sel = $('#mv-sort', body);
+    sel.onchange = () => { MV.sort = sel.value; draw(); };
+    $('#mv-q', body).oninput = (e) => { MV.q = e.target.value; const p = e.target.selectionStart; draw(); const i = $('#mv-q', body); i.focus(); i.setSelectionRange(p, p); };
+    $('#mv-min', body).oninput = (e) => { MV.min = e.target.value; };
+    $('#mv-max', body).oninput = (e) => { MV.max = e.target.value; };
+    $('#mv-agesel', body).onclick = () => {
+      if (min == null && max == null) { toast('اكتب سناً واحداً على الأقل'); return; }
+      list.forEach((m) => { const a = ageOf(m.dob); if (a != null && (min == null || a >= min) && (max == null || a <= max)) MV.sel.add(m.id); });
+      draw();
+    };
+    $('#mv-all', body).onclick = () => { list.forEach((m) => MV.sel.add(m.id)); draw(); };
+    $('#mv-none', body).onclick = () => { MV.sel.clear(); draw(); };
+    const toggle = (id) => { MV.sel.has(id) ? MV.sel.delete(id) : MV.sel.add(id); draw(); };
+    $('#mv-list', body).onclick = (e) => { const r = e.target.closest('[data-id]'); if (r) toggle(r.dataset.id); };
+    $('#mv-list', body).onkeydown = (e) => { if (e.key === ' ' || e.key === 'Enter') { const r = e.target.closest('[data-id]'); if (r) { e.preventDefault(); toggle(r.dataset.id); } } };
+    $('#mv-go', body).onclick = async () => {
+      const ids = [...MV.sel].filter((id) => all.some((m) => m.id === id));
+      const from = getGroup(MV.from), to = getGroup(MV.to);
+      if (!ids.length || !to) return;
+      if (!await confirmBox(`${MV.copy ? 'نسخ' : 'نقل'} ${ids.length} عضو من «${esc(from.name)}» إلى «${esc(to.name)}»؟`, MV.copy ? 'نسخ' : 'نقل')) return;
+      keepOnChange = true; // re-render only this screen, keeping the selection logic below in control
+      setMembership(ids, MV.to, true);
+      if (!MV.copy) setMembership(ids, MV.from, false);
+      keepOnChange = false;
+      MV.sel.clear();
+      toast(`${MV.copy ? 'نُسخ' : 'نُقل'} ${ids.length} عضو إلى «${to.name}»`);
+      viewMove();
+    };
+  };
+
+  $('#mv-from', view).onchange = (e) => { MV.from = e.target.value; MV.sel.clear(); draw(); };
+  $('#mv-to', view).onchange = (e) => { MV.to = e.target.value; draw(); };
+  $('#mv-copy', view).onchange = (e) => { MV.copy = e.target.checked; draw(); };
+  draw();
+}
+
 function viewBirthdays() {
   const now = new Date();
   if (bMonth == null) bMonth = now.getMonth() + 1;
@@ -249,7 +331,7 @@ function viewBirthdays() {
     const turning = bd.year > 1900 ? year - bd.year : null;
     const badge = isThisMonth ? (diff === 0 ? '<span class="tag today">اليوم</span>' : diff > 0 ? `<span class="muted small">${whenLabel(diff)}</span>` : '') : '';
     return `<tr data-member="${m.id}"><td class="shrink"><div class="bday"><b class="num">${bd.day}</b><span>${WEEKDAYS[date.getDay()]}</span></div></td>
-        <td><div class="who"><span class="avatar">${esc(m.name.charAt(0).toUpperCase())}</span><div><div class="nm">${esc(m.name)}</div><div class="muted small show-sm">${turning ? `يكمل ${turning} سنة` : ''}</div></div></div></td>
+        <td><div class="who"><span class="avatar">${esc(m.name.charAt(0).toUpperCase())}</span><div><div class="nm">${esc(m.name)}</div><div class="muted small show-sm">${turning ? `يكمل ${turning} سنة` : ''}</div></div>${pendTag(m)}</div></td>
         <td class="hide-sm num">${turning ? `${turning} سنة` : '—'}</td>
         <td class="hide-sm"><div class="tags">${m.groups.map(getGroup).filter(Boolean).slice(0, 3).map(groupTag).join('')}</div></td><td class="end">${badge}</td></tr>`;
   }).join('')}</tbody></table></div>` : emptyState('gift', 'لا توجد أعياد ميلاد في هذا الشهر', 'اختر شهراً آخر، أو أضف تواريخ الميلاد في بيانات الأعضاء.')}`;
@@ -296,7 +378,7 @@ function viewHome() {
     : `<div class="panel pad muted">لا توجد أعياد ميلاد خلال الأسبوعين القادمين.</div>`}
     ${atRisk.length ? `<div class="h2">يحتاجون متابعة <small>حضور أقل من 50%</small></div>
       <div class="panel table-wrap"><table class="table"><thead><tr><th>الاسم</th><th class="hide-sm">الكورس</th><th class="hide-sm">الحضور</th><th class="end">النسبة</th></tr></thead><tbody>
-      ${atRisk.slice(0, 8).map((r) => `<tr data-member="${r.member.id}"><td><div class="who"><span class="avatar">${esc(r.member.name.charAt(0).toUpperCase())}</span><div><div class="nm">${esc(r.member.name)}</div><div class="muted small show-sm">${esc(r.group.name)}</div></div></div></td>
+      ${atRisk.slice(0, 8).map((r) => `<tr data-member="${r.member.id}"><td><div class="who"><span class="avatar">${esc(r.member.name.charAt(0).toUpperCase())}</span><div><div class="nm">${esc(r.member.name)}</div><div class="muted small show-sm">${esc(r.group.name)}</div></div>${pendTag(r.member)}</div></td>
         <td class="hide-sm">${groupTag(r.group)}</td><td class="hide-sm num muted">${r.attended} من ${r.total}</td><td class="end"><span class="pct low">${r.pct}%</span></td></tr>`).join('')}
       </tbody></table></div>` : ''}`;
   $('#quick-att').onclick = pickCourseForAttendance;
@@ -430,7 +512,7 @@ function tabReport(t, g, rep) {
       <button class="btn sm no-print" id="csv">${ic('download', 'sm')}Excel</button><button class="btn sm icon no-print" id="print" aria-label="طباعة" title="طباعة">${ic('printer', 'sm')}</button></div>
     <div class="panel matrix-wrap"><table class="matrix"><thead><tr><th class="nm">الاسم</th><th>النسبة</th><th>الحضور</th>
       ${shown.map((s) => `<th><a data-session="${s.id}" title="فتح الجلسة">${shortDate(s.date)}</a></th>`).join('')}</tr></thead><tbody>
-      ${rows.map((r) => `<tr><td class="nm"><a href="#" data-member="${r.member.id}">${esc(r.member.name)}</a></td>
+      ${rows.map((r) => `<tr><td class="nm"><a href="#" data-member="${r.member.id}">${esc(r.member.name)}</a>${pendTag(r.member)}</td>
         <td><span class="pct ${pctClass(r.pct)}" style="display:inline-block">${pctText(r.pct)}</span></td><td class="num">${r.attended}/${r.total}</td>
         ${shown.map((s) => `<td>${s.present.includes(r.member.id) ? `<span class="yes">${ic('check')}</span>` : '<span class="no">—</span>'}</td>`).join('')}</tr>`).join('')}
       </tbody></table></div>
@@ -488,7 +570,7 @@ function pickMembers({ title, exclude = new Set(), onConfirm, allowNew }) {
   const draw = () => {
     const q = norm($('#pq', m.el).value);
     const list = db.members.filter((x) => !exclude.has(x.id) && (!q || norm(x.name + ' ' + x.phone).includes(q))).sort(byName).slice(0, 150);
-    $('#plist', m.el).innerHTML = list.length ? list.map((x) => `<div class="item ${chosen.has(x.id) ? 'on' : ''}" data-id="${x.id}"><span class="checkbox">${ic('check')}</span><span class="nm">${esc(x.name)}</span></div>`).join('') : `<div class="empty">لا توجد نتائج</div>`;
+    $('#plist', m.el).innerHTML = list.length ? list.map((x) => `<div class="item ${chosen.has(x.id) ? 'on' : ''}" data-id="${x.id}"><span class="checkbox">${ic('check')}</span><span class="nm">${esc(x.name)}</span>${pendTag(x)}</div>`).join('') : `<div class="empty">لا توجد نتائج</div>`;
     $('#pcount', m.el).textContent = chosen.size ? `تم اختيار ${chosen.size}` : '';
     $('#p-ok', m.el).disabled = !chosen.size;
   };
@@ -562,7 +644,7 @@ function viewSession({ a: gid, b: sid }) {
     const all = roster();
     const list = all.filter((m) => (!q || norm(m.name).includes(q)) && (filter === 'all' || (filter === 'in') === present.has(m.id)));
     $('#alist', view).innerHTML = list.length ? list.map((m) => `<div class="item ${present.has(m.id) ? 'on' : ''}" data-id="${m.id}" tabindex="0" role="checkbox" aria-checked="${present.has(m.id)}">
-      <span class="checkbox">${ic('check')}</span><span class="nm">${esc(m.name)}</span></div>`).join('')
+      <span class="checkbox">${ic('check')}</span><span class="nm">${esc(m.name)}</span>${pendTag(m)}</div>`).join('')
       : `<div class="empty">${all.length ? 'لا توجد نتائج' : 'لا يوجد أعضاء في هذا الكورس. أضفهم من صفحة الكورس أو استخدم «إضافة شخص من خارج الكورس».'}</div>`;
     $$('#sf button', view).forEach((b) => b.classList.toggle('on', b.dataset.v === filter));
     update();
@@ -743,6 +825,18 @@ function viewData() {
 }
 
 /* ---------- shared bindings ---------- */
+// One listener for every "discard this person's changes" button, wherever the person's row appears.
+// Capture phase, so the row's own click (open member / toggle selection) never fires.
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-discard]'); if (!b) return;
+  e.stopPropagation(); e.preventDefault();
+  const m = getMember(b.dataset.discard); if (!m) return;
+  const isNew = pendingOf(m) === 'new';
+  if (await confirmBox(isNew ? `«${esc(m.name)}» عضو جديد لم يُؤكَّد بعد. حذفه نهائياً؟` : `تجاهل تعديلات «${esc(m.name)}» والعودة لآخر نسخة مؤكدة؟`, isNew ? 'حذف' : 'تجاهل')) {
+    discardMemberChanges(m.id); render(); toast('تم تجاهل التعديلات');
+  }
+}, true);
+
 function bindCommon(root) {
   $$('[data-member]', root).forEach((e) => {
     if (e.dataset.bound) return; e.dataset.bound = 1;

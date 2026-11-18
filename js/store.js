@@ -72,6 +72,7 @@ export function adoptDraft() {
 
 /** Throw away unconfirmed edits and go back to the last confirmed copy. */
 export function discardDraft() {
+  baseMap = null;
   try { localStorage.removeItem(LS_DRAFT); localStorage.removeItem(LS_OLD); } catch (e) { /* ignore */ }
   status.pendingDraft = null;
   status.dirty = false;
@@ -81,6 +82,7 @@ export function discardDraft() {
 
 /** The current data has just been written to a file (or came from one): it is now the confirmed copy. */
 export function markConfirmed() {
+  baseMap = null;
   try { localStorage.setItem(LS_CACHE, exportJson()); localStorage.removeItem(LS_DRAFT); localStorage.removeItem(LS_OLD); } catch (e) { /* ignore */ }
   status.dirty = false;
   status.pendingDraft = null;
@@ -152,6 +154,34 @@ function migrateLegacy(list) {
   return { members, groups, sessions: [] };
 }
 
+/* ---------- per-member pending changes (local mode: edits vs the last confirmed copy) ---------- */
+
+const memberSig = (m) => JSON.stringify({ ...m, updatedAt: 0, groups: [...m.groups].sort() });
+/** Confirmed copy of every member, read lazily from the confirmed cache; reset whenever that copy changes. */
+let baseMap = null;
+const baseline = () => {
+  if (!baseMap) baseMap = new Map(normalize(readLS(LS_CACHE)).members.map((m) => [m.id, m]));
+  return baseMap;
+};
+
+/** 'new' | 'edited' when this member has unconfirmed changes, otherwise null (always null in server mode). */
+export function pendingOf(m) {
+  if (status.mode !== 'local' || !status.dirty) return null;
+  const base = baseline().get(m.id);
+  if (!base) return 'new';
+  return memberSig(base) === memberSig(m) ? null : 'edited';
+}
+
+/** Drop one member's unconfirmed changes: a new member is removed, an edited one goes back to the confirmed copy. */
+export function discardMemberChanges(id) {
+  const m = getMember(id);
+  if (!m) return;
+  const base = baseline().get(id);
+  if (!base) { deleteMember(id); return; }
+  Object.assign(m, JSON.parse(JSON.stringify(base)));
+  commit();
+}
+
 /* ---------- persistence (autosave) ---------- */
 
 let timer = null;
@@ -187,6 +217,7 @@ export async function saveNow() {
 }
 
 export function clearLocal() {
+  baseMap = null;
   try { localStorage.removeItem(LS_CACHE); localStorage.removeItem(LS_DRAFT); localStorage.removeItem(LS_OLD); } catch (e) { /* ignore */ }
   status.dirty = false;
 }

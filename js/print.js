@@ -5,7 +5,7 @@
  */
 import { db, ageOf, today, getGroup, isCourse, courseReport } from './store.js';
 import { $, $$, esc, ic, byName, norm, head, downloadCsv, toast } from './ui.js';
-import { COLS, COL, colText } from './columns.js';
+import { COLS, COL, colText, pendTag } from './columns.js';
 
 const LS = 'church_print_cols';
 const DEFAULT_ORDER = ['name', ...COLS.map((c) => c.key)];
@@ -243,7 +243,7 @@ export function viewPrint(view) {
         const gset = new Set(picked.map((g) => g.id));
         const pool = db.members.filter((m) => m.groups.some((id) => gset.has(id))).sort(byName);
         const drawEx = () => {
-          $('#p-exlist', host).innerHTML = pool.map((m) => `<div class="item ${P.excl.has(m.id) ? '' : 'on'}" data-id="${m.id}"><span class="checkbox">${ic('check')}</span><span class="nm">${esc(m.name)}</span></div>`).join('');
+          $('#p-exlist', host).innerHTML = pool.map((m) => `<div class="item ${P.excl.has(m.id) ? '' : 'on'}" data-id="${m.id}"><span class="checkbox">${ic('check')}</span><span class="nm">${esc(m.name)}</span>${pendTag(m)}</div>`).join('');
           const n = pool.filter((m) => P.excl.has(m.id)).length;
           $('#p-excount', host).textContent = n ? `مستثنى: ${n} من ${pool.length}` : `الكل (${pool.length})`;
         };
@@ -271,7 +271,7 @@ export function viewPrint(view) {
       const drawList = () => {
         const q = norm(P.q);
         const list = db.members.filter((m) => !q || norm(m.name).includes(q)).sort(byName);
-        $('#p-list', host).innerHTML = list.length ? list.slice(0, 400).map((m) => `<div class="item ${P.custom.has(m.id) ? 'on' : ''}" data-id="${m.id}"><span class="checkbox">${ic('check')}</span><span class="nm">${esc(m.name)}</span></div>`).join('') : '<div class="empty">لا توجد نتائج</div>';
+        $('#p-list', host).innerHTML = list.length ? list.slice(0, 400).map((m) => `<div class="item ${P.custom.has(m.id) ? 'on' : ''}" data-id="${m.id}"><span class="checkbox">${ic('check')}</span><span class="nm">${esc(m.name)}</span>${pendTag(m)}</div>`).join('') : '<div class="empty">لا توجد نتائج</div>';
         $('#p-selcount', host).textContent = `المحدد: ${P.custom.size}`;
         return list;
       };
