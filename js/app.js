@@ -14,7 +14,7 @@ import {
   $, $$, esc, byName, norm, pctClass, pctText, fmtDate, shortDate, WEEKDAYS, MONTHS, ic, toast, openModal, confirmBox,
   popover, groupTag, bar, meter, emptyState, head, crumb, download, downloadCsv,
 } from './ui.js';
-import { COLS, colCell, visibleColumns, setVisibleColumns, resetVisibleColumns } from './columns.js';
+import { COLS, colCell, colText, visibleColumns, setVisibleColumns, resetVisibleColumns } from './columns.js';
 import { viewPrint } from './print.js';
 
 const view = $('#view');
@@ -26,11 +26,17 @@ const NAV = [
 $('#nav-links').innerHTML = NAV.map(([k, label, icon, href]) => `<a href="${href}" data-nav="${k}">${ic(icon)}<span>${label}</span></a>`).join('');
 
 /* ---------- reusable tables ---------- */
-function memberTable(list, { cols, remove = null } = {}) {
+function memberTable(list, { cols, remove = null, sort = null } = {}) {
   if (!list.length) return '<div class="empty">لا توجد نتائج</div>';
   cols = cols || visibleColumns('members');
   const label = (k) => COLS.find((c) => c.key === k).label;
-  return `<div class="table-wrap"><table class="table members"><thead><tr><th>الاسم</th>${cols.map((k) => `<th>${esc(label(k))}</th>`).join('')}${remove ? '<th></th>' : ''}</tr></thead><tbody>
+  // With `sort`, headers are buttons: click to sort ascending, again for descending, again to clear.
+  const th = (k, text) => {
+    if (!sort) return `<th>${esc(text)}</th>`;
+    const on = sort.key === k;
+    return `<th aria-sort="${on ? (sort.dir > 0 ? 'ascending' : 'descending') : 'none'}"><button type="button" class="thsort ${on ? 'on' : ''}" data-sort="${esc(k)}">${esc(text)}<span class="arr">${on ? (sort.dir > 0 ? '▲' : '▼') : '↕'}</span></button></th>`;
+  };
+  return `<div class="table-wrap"><table class="table members"><thead><tr>${th('name', 'الاسم')}${cols.map((k) => th(k, label(k))).join('')}${remove ? '<th></th>' : ''}</tr></thead><tbody>
     ${list.map((m) => `<tr data-member="${m.id}" tabindex="0"><td><div class="who"><span class="avatar">${esc((m.name || '؟').trim().charAt(0).toUpperCase())}</span><div class="nm">${esc(m.name)}</div></div></td>
       ${cols.map((k) => `<td>${colCell(k, m)}</td>`).join('')}
       ${remove ? `<td class="shrink end"><button class="btn quiet icon sm" data-remove="${m.id}" title="${esc(remove)}" aria-label="${esc(remove)}">${ic('x', 'sm')}</button></td>` : ''}</tr>`).join('')}
@@ -87,6 +93,26 @@ function courseTable(groups) {
 let keepOnChange = false; // self-updating views (attendance) skip the global re-render
 let memberQuery = '';
 let memberGroupFilter = 'all';
+let memberSort = null; // { key, dir: 1 | -1 } or null = by name
+
+/** Comparator for sorting the members table by a header; empty values always go last. */
+function memberSorter({ key, dir }) {
+  const val = (m) => {
+    if (key === 'name') return m.name;
+    if (key === 'age') return ageOf(m.dob) ?? null;
+    if (key === 'dob') { const p = String(m.dob || '').split(/[/\-.]/).map(Number); return p.length === 3 && p[2] ? p[2] * 10000 + p[1] * 100 + p[0] : null; }
+    if (key === 'updatedAt') return m.updatedAt ? Date.parse(m.updatedAt) : null;
+    const t = colText(key, m); return t === '' ? null : t;
+  };
+  return (a, b) => {
+    const x = val(a), y = val(b);
+    if (x == null && y == null) return byName(a, b);
+    if (x == null) return 1;
+    if (y == null) return -1;
+    const c = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'ar', { numeric: true });
+    return c * dir || byName(a, b);
+  };
+}
 
 function route() {
   const parts = (location.hash.replace(/^#\/?/, '') || '').split('/').map(decodeURIComponent);
@@ -572,12 +598,18 @@ function viewMembers() {
     const list = db.members.filter((m) => {
       if (memberGroupFilter === 'none' ? m.groups.length : memberGroupFilter !== 'all' && !m.groups.includes(memberGroupFilter)) return false;
       return !q || norm([m.name, m.phone, m.fatherPhone, m.motherPhone, m.notes, m.education].join(' ')).includes(q);
-    }).sort(byName);
+    }).sort(memberSort ? memberSorter(memberSort) : byName);
     $('#m-count').textContent = list.length === db.members.length ? `${db.members.length} عضو` : `${list.length} من ${db.members.length}`;
     $('#mlist').innerHTML = !db.members.length ? emptyState('users', 'لا يوجد أعضاء', 'أضف عضواً جديداً أو استورد ملف بيانات من صفحة «البيانات».')
-      : memberTable(list.slice(0, 300)) + (list.length > 300 ? `<div class="empty small">يُعرض أول 300 — استخدم البحث للتضييق</div>` : '');
+      : memberTable(list.slice(0, 300), { sort: memberSort || { key: '' } }) + (list.length > 300 ? `<div class="empty small">يُعرض أول 300 — استخدم البحث للتضييق</div>` : '');
     bindCommon($('#mlist'));
   };
+  $('#mlist').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-sort]'); if (!b) return;
+    const k = b.dataset.sort;
+    memberSort = !memberSort || memberSort.key !== k ? { key: k, dir: 1 } : memberSort.dir === 1 ? { key: k, dir: -1 } : null;
+    draw();
+  });
   $('#mq').addEventListener('input', (e) => { memberQuery = e.target.value; draw(); });
   $('#mg').addEventListener('change', (e) => { memberGroupFilter = e.target.value; draw(); });
   bindColButton(view, draw);

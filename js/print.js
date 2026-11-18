@@ -27,7 +27,7 @@ const P = {
   mode: 'all', groups: new Set(), excl: new Set(), custom: new Set(), q: '', split: false, pageBreak: false,
   alias: {}, // groupId -> name to print instead of the saved group name
   rate: new Set(), showCounts: false, // courses whose attendance is printed as columns
-  title: '', subtitle: '', logo: true, numbers: true, sign: 'أمين الخدمة، الأب الكاهن',
+  title: '', subtitle: '', logo: true, numbers: true, banded: false, sign: 'أمين الخدمة، الأب الكاهن',
   orient: 'portrait', size: 'md', sort: 'name', cols: loadCols(),
 };
 // Only the ordinary columns are remembered between visits; attendance columns depend on the chosen courses.
@@ -124,7 +124,7 @@ function sheetHtml() {
   const signs = P.sign.split(/[,،]/).map((s) => s.trim()).filter(Boolean);
   const ready = total > 0;
 
-  const table = (members) => `<table class="sh-table"><thead><tr>${P.numbers ? '<th class="c-n">م</th>' : ''}${cols.map((k) => `<th>${esc(LABEL(k))}</th>`).join('')}</tr></thead><tbody>
+  const table = (members) => `<table class="sh-table ${P.banded ? 'banded' : ''}"><thead><tr>${P.numbers ? '<th class="c-n">م</th>' : ''}${cols.map((k) => `<th>${esc(LABEL(k))}</th>`).join('')}</tr></thead><tbody>
     ${members.map((m, i) => `<tr>${P.numbers ? `<td class="c-n">${i + 1}</td>` : ''}${cols.map((k) => `<td class="${k === 'name' ? 'c-name' : isNumCol(k) ? 'c-num' : ''}">${esc(colValue(k, m))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
 
   const sessWord = (n) => (n === 0 ? 'لا جلسات' : n === 1 ? 'جلسة واحدة' : n === 2 ? 'جلستان' : n >= 3 && n <= 10 ? `${n} جلسات` : `${n} جلسة`);
@@ -181,6 +181,7 @@ export function viewPrint(view) {
         </div>
         <div class="field"><label class="f" for="p-sort">الترتيب</label><select id="p-sort"><option value="name">حسب الاسم</option><option value="age">حسب السن (الأكبر أولاً)</option><option value="gender">ذكور ثم إناث</option><option value="rate">حسب نسبة الحضور (الأعلى أولاً)</option></select></div>
         <label class="chk"><input type="checkbox" id="p-logo"> إظهار شعار الكنيسة</label>
+        <label class="chk"><input type="checkbox" id="p-banded"> تلوين الصفوف بالتناوب</label>
       </section>
 
       <section class="panel pad ps ps-cols">
@@ -338,7 +339,7 @@ export function viewPrint(view) {
     el.addEventListener(type === 'checked' ? 'change' : 'input', () => { P[key] = type === 'checked' ? el.checked : el.value; drawSheet(); });
   };
   bind('#p-sub', 'subtitle'); bind('#p-sign', 'sign'); bind('#p-sort', 'sort');
-  bind('#p-logo', 'logo', 'checked'); bind('#p-numbers', 'numbers', 'checked');
+  bind('#p-logo', 'logo', 'checked'); bind('#p-banded', 'banded', 'checked'); bind('#p-numbers', 'numbers', 'checked');
   // Title: shows the automatic title until you type your own; clearing it (or the button) goes back to automatic.
   $('#p-title', view).value = P.title || autoTitle();
   $('#p-title', view).addEventListener('input', (e) => { P.title = e.target.value.trim() ? e.target.value : ''; drawSheet(); });

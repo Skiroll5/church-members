@@ -295,6 +295,13 @@ input.invalid { border-color: var(--bad); }
 .sh-table tr { break-inside: avoid; }
 .sh-table th { background: #e9edf5; color: #1a2a55; border: .75px solid #8d98ad; padding: 5px 7px; font-weight: 700; text-align: start; }
 .sh-table td { border: .5px solid #b5bdcc; padding: 4px 7px; vertical-align: top; }
+.sh-table.banded tbody tr:nth-child(even) td { background: #eef1f7; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.sh-table th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.thsort { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.thsort:hover, .thsort.on { color: var(--text, inherit); }
+.thsort:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.thsort .arr { font-size: 10px; opacity: .45; }
+.thsort.on .arr { opacity: 1; }
 .sh-table .c-n { width: 34px; text-align: center; }
 .sh-table .c-name { font-weight: 600; }
 .sh-table .c-num { direction: ltr; text-align: right; }
