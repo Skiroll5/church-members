@@ -1,191 +1,347 @@
 /**
- * print.js - Professional Print to PDF Formatter using pure Tailwind CSS
- * Prints all groups sequentially with high-resolution logo (Picture5.png), official letterhead, and crisp tables.
+ * print.js - "Print & export" page: choose who (everyone / groups / hand-picked), which columns
+ * (including attendance rate for courses), and get an official letterhead sheet (church logo)
+ * that prints to paper or PDF, or exports to Excel (CSV).
  */
-import { state } from './state.js';
-import { calculateAge } from './ui.js';
+import { db, ageOf, today, getGroup, isCourse, courseReport } from './store.js';
+import { $, $$, esc, ic, byName, norm, head, downloadCsv, toast } from './ui.js';
+import { COLS, COL, colText } from './columns.js';
 
-export function prepareAndPrint() {
-  const filtered = state.getFilteredMembers();
-  const printContainer = document.getElementById('print-area');
-  if (!printContainer) return;
+const LS = 'church_print_cols';
+const DEFAULT_ORDER = ['name', ...COLS.map((c) => c.key)];
+const isDyn = (k) => k.includes(':'); // rate:<courseId> / att:<courseId>
 
-  const isAllGroups = state.filters.group === 'all';
-  let groupLabel = 'الكشف العام الشامل (كافة المجموعات)';
-  if (state.filters.group === '__dual__' || state.filters.group === '__multi__') {
-    groupLabel = 'الأعضاء المشتركون في عدة مجموعات';
-  } else if (state.filters.group === '__no_phone__') {
-    groupLabel = 'الأعضاء بدون رقم هاتف';
-  } else if (state.filters.group === '__no_dob__') {
-    groupLabel = 'الأعضاء بدون تاريخ ميلاد';
-  } else if (!isAllGroups) {
-    groupLabel = `كشف مجموعة: ${state.filters.group}`;
-  }
-
-  const printDate = new Date().toLocaleDateString('ar-EG', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
-  const printTime = new Date().toLocaleTimeString('ar-EG', {
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-
-  // Determine sections to print (current selected group or all groups)
-  let groupsToPrint = [];
-  if (isAllGroups || state.filters.group === '__all_sunday_school__' || state.filters.group === '__all_service__') {
-    groupsToPrint = state.groupTab === 'sunday_school' ? [...state.sundaySchoolClasses] : [...state.serviceGroups];
-  } else if (state.filters.group === '__dual__' || state.filters.group === '__multi__') {
-    groupsToPrint = ['__multi__'];
-  } else if (state.filters.group === '__no_phone__') {
-    groupsToPrint = ['__no_phone__'];
-  } else if (state.filters.group === '__no_dob__') {
-    groupsToPrint = ['__no_dob__'];
-  } else {
-    groupsToPrint = [state.filters.group];
-  }
-
-  let sectionsHtml = '';
-
-  groupsToPrint.forEach((gName, gIdx) => {
-    let groupMembers = [];
-    let title = gName;
-
-    if (gName === '__dual__' || gName === '__multi__') {
-      groupMembers = filtered.filter(m => m.groups && m.groups.length > 1);
-      title = 'أعضاء مسجلين في عدة مجموعات في نفس الوقت';
-    } else if (gName === '__no_phone__') {
-      groupMembers = filtered.filter(m => {
-        const hasP = Boolean(m.phone && m.phone.trim());
-        const hasF = Boolean(m.fatherPhone && m.fatherPhone.trim());
-        const hasM = Boolean(m.motherPhone && m.motherPhone.trim());
-        return !hasP && !hasF && !hasM;
-      });
-      title = 'كشف الأعضاء بدون رقم هاتف';
-    } else if (gName === '__no_dob__') {
-      groupMembers = filtered.filter(m => !m.dob || !m.dob.trim());
-      title = 'كشف الأعضاء بدون تاريخ ميلاد';
-    } else {
-      groupMembers = filtered.filter(m => m.groups && m.groups.includes(gName));
+function loadCols() {
+  try {
+    const s = JSON.parse(localStorage.getItem(LS));
+    if (s && Array.isArray(s.order) && Array.isArray(s.on)) {
+      const order = [...s.order.filter((k) => DEFAULT_ORDER.includes(k)), ...DEFAULT_ORDER.filter((k) => !s.order.includes(k))];
+      return { order, on: new Set([...s.on.filter((k) => DEFAULT_ORDER.includes(k)), 'name']) };
     }
+  } catch (e) { /* ignore */ }
+  return { order: [...DEFAULT_ORDER], on: new Set(['name', 'age', 'phone']) };
+}
 
-    if (groupMembers.length === 0) return;
+// Page state lives for the whole session, so coming back to the page keeps your choices.
+const P = {
+  mode: 'all', groups: new Set(), custom: new Set(), q: '', split: false, pageBreak: false,
+  alias: {}, // groupId -> name to print instead of the saved group name
+  rate: new Set(), showCounts: false, // courses whose attendance is printed as columns
+  title: '', subtitle: '', logo: true, numbers: true, sign: 'أمين الخدمة، الأب الكاهن',
+  orient: 'portrait', size: 'md', sort: 'name', cols: loadCols(),
+};
+// Only the ordinary columns are remembered between visits; attendance columns depend on the chosen courses.
+const saveCols = () => {
+  try { localStorage.setItem(LS, JSON.stringify({ order: P.cols.order.filter((k) => !isDyn(k)), on: [...P.cols.on].filter((k) => !isDyn(k)) })); } catch (e) { /* ignore */ }
+};
 
-    let rowsHtml = '';
-    groupMembers.forEach((m, idx) => {
-      const age = calculateAge(m.dob);
-      const marriedMark = m.isMarried ? ' *' : '';
-      
-      let groupsPrintText = '';
-      if (Array.isArray(m.groups) && m.groups.length > 0) {
-        groupsPrintText = `المجموعات: ${m.groups.join('، ')}`;
-      }
+const FONT = { sm: 10, md: 11.5, lg: 13 };
+const disp = (g) => (P.alias[g.id] || '').trim() || g.name;
+const gname = (id) => { const g = getGroup(id); return g ? disp(g) : ''; };
 
-      const contacts = [];
-      if (m.phone) contacts.push(`<div><span class="text-slate-500 font-sans">شخصي:</span> ${m.phone}</div>`);
-      if (m.fatherPhone) contacts.push(`<div><span class="text-slate-500 font-sans">الأب:</span> ${m.fatherPhone}</div>`);
-      if (m.motherPhone) contacts.push(`<div><span class="text-slate-500 font-sans">الأم:</span> ${m.motherPhone}</div>`);
-      const contactText = contacts.length > 0 ? contacts.join('') : '—';
+function LABEL(k) {
+  if (k === 'name') return 'الاسم';
+  if (k.startsWith('rate:')) return `نسبة الحضور — ${gname(k.slice(5))}`;
+  if (k.startsWith('att:')) return `مرات الحضور — ${gname(k.slice(4))}`;
+  return COL[k].label;
+}
 
-      let withFamilyText = '—';
-      if (m.withFamily === true) withFamilyText = 'نعم';
-      else if (m.withFamily === false) withFamilyText = 'لا';
+/* ----- attendance columns ----- */
+let RM = {};
+function buildRates() {
+  RM = {};
+  P.rate.forEach((id) => {
+    const rep = courseReport(id);
+    RM[id] = { map: new Map(rep.rows.map((r) => [r.member.id, r])), total: rep.sessions.length };
+  });
+}
+/** Keep the column list in step with the chosen courses (add new ones at the end, drop removed ones). */
+function syncRateCols() {
+  const o = P.cols.order, on = P.cols.on;
+  const valid = new Set();
+  [...P.rate].forEach((id) => {
+    if (!getGroup(id)) { P.rate.delete(id); return; }
+    valid.add('rate:' + id);
+    if (P.showCounts) valid.add('att:' + id);
+  });
+  for (let i = o.length - 1; i >= 0; i--) if (isDyn(o[i]) && !valid.has(o[i])) { on.delete(o[i]); o.splice(i, 1); }
+  valid.forEach((k) => { if (!o.includes(k)) { o.push(k); on.add(k); } });
+}
+function colValue(k, m) {
+  if (k === 'name') return m.name;
+  if (isDyn(k)) {
+    const [t, id] = k.split(':');
+    const r = RM[id] && RM[id].map.get(m.id);
+    if (!r) return '—';
+    if (t === 'rate') return r.pct == null ? '—' : r.pct + '%';
+    return `${r.attended} من ${r.total}`;
+  }
+  return colText(k, m);
+}
+const isNumCol = (k) => isDyn(k) || (COL[k] && COL[k].num);
 
-      const rowZebra = idx % 2 === 1 ? 'bg-slate-50' : 'bg-white';
+const activeCols = () => P.cols.order.filter((k) => P.cols.on.has(k));
 
-      rowsHtml += `
-        <tr class="${rowZebra} border-b border-slate-300 text-[11px] leading-tight break-inside-avoid">
-          <td class="p-1.5 text-center font-mono font-bold border-l border-slate-300 w-8">${idx + 1}</td>
-          <td class="p-1.5 font-bold text-slate-900 border-l border-slate-300">
-            <span>${m.name}${marriedMark}</span>
-            ${groupsPrintText ? `<span class="text-[9px] text-slate-500 font-normal block mt-0.5">${groupsPrintText}</span>` : ''}
-          </td>
-          <td class="p-1.5 text-center border-l border-slate-300 whitespace-nowrap font-mono text-[10px]" dir="ltr">${m.dob || '—'}</td>
-          <td class="p-1.5 text-center font-semibold border-l border-slate-300 whitespace-nowrap">${age}</td>
-          <td class="p-1.5 border-l border-slate-300 font-mono text-[10px] space-y-0.5" dir="ltr">${contactText}</td>
-          <td class="p-1.5 border-l border-slate-300">${m.education || '—'}</td>
-          <td class="p-1.5 border-l border-slate-300 font-medium">${m.serviceType || '—'}</td>
-          <td class="p-1.5 text-center border-l border-slate-300">${withFamilyText}</td>
-          <td class="p-1.5 text-center border-l border-slate-300 font-semibold">${m.gender === 'Female' ? 'أنثى' : 'ذكر'}</td>
-          <td class="p-1.5 text-slate-700">${m.notes || '—'}</td>
-        </tr>
-      `;
-    });
+function sorter() {
+  if (P.sort === 'rate') {
+    const id = [...P.rate][0];
+    if (id && RM[id]) return (a, b) => ((RM[id].map.get(b.id)?.pct ?? -1) - (RM[id].map.get(a.id)?.pct ?? -1)) || byName(a, b);
+  }
+  if (P.sort === 'age') return (a, b) => (ageOf(b.dob) ?? -1) - (ageOf(a.dob) ?? -1) || byName(a, b);
+  if (P.sort === 'gender') return (a, b) => (a.gender === 'Female') - (b.gender === 'Female') || byName(a, b);
+  return byName;
+}
 
-    sectionsHtml += `
-      <div class="mb-6 break-inside-avoid">
-        <div class="flex items-center justify-between bg-slate-100 border border-slate-300 px-3 py-1.5 mb-1.5">
-          <h3 class="font-bold text-xs text-slate-900">${title}</h3>
-          <span class="text-xs font-mono font-bold text-slate-700">عدد الأفراد: ${groupMembers.length}</span>
+/** The people to print, as one or more titled sections. */
+function sections() {
+  buildRates();
+  const cmp = sorter();
+  if (P.mode === 'custom') return [{ title: '', members: db.members.filter((m) => P.custom.has(m.id)).sort(cmp) }];
+  if (P.mode === 'group') {
+    const gs = db.groups.filter((g) => P.groups.has(g.id));
+    if (P.split) return gs.map((g) => ({ title: disp(g), members: db.members.filter((m) => m.groups.includes(g.id)).sort(cmp) }));
+    const set = new Set(gs.map((g) => g.id));
+    return [{ title: '', members: db.members.filter((m) => m.groups.some((id) => set.has(id))).sort(cmp) }];
+  }
+  return [{ title: '', members: [...db.members].sort(cmp) }];
+}
+
+function autoTitle() {
+  if (P.mode === 'group' && P.groups.size) return 'كشف أسماء — ' + db.groups.filter((g) => P.groups.has(g.id)).map(disp).join(' + ');
+  if (P.mode === 'custom') return 'كشف أسماء مختارة';
+  return 'كشف أسماء المخدومين';
+}
+
+const longDate = () => new Date().toLocaleDateString('ar-EG-u-nu-latn', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+function sheetHtml() {
+  syncRateCols();
+  const secs = sections();
+  const cols = activeCols();
+  const total = new Set(secs.flatMap((s) => s.members.map((m) => m.id))).size;
+  const title = P.title.trim() || autoTitle();
+  const signs = P.sign.split(/[,،]/).map((s) => s.trim()).filter(Boolean);
+  const ready = total > 0;
+
+  const table = (members) => `<table class="sh-table"><thead><tr>${P.numbers ? '<th class="c-n">م</th>' : ''}${cols.map((k) => `<th>${esc(LABEL(k))}</th>`).join('')}</tr></thead><tbody>
+    ${members.map((m, i) => `<tr>${P.numbers ? `<td class="c-n">${i + 1}</td>` : ''}${cols.map((k) => `<td class="${k === 'name' ? 'c-name' : isNumCol(k) ? 'c-num' : ''}">${esc(colValue(k, m))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+
+  const sessWord = (n) => (n === 0 ? 'لا جلسات' : n === 1 ? 'جلسة واحدة' : n === 2 ? 'جلستان' : n >= 3 && n <= 10 ? `${n} جلسات` : `${n} جلسة`);
+  const rateInfo = [...P.rate].map((id) => `<span>${esc(gname(id))}: <b>${sessWord(RM[id] ? RM[id].total : 0)}</b></span>`).join('');
+
+  return `<div class="sheet ${P.orient}" style="font-size:${FONT[P.size]}px">
+    <header class="sh-head">
+      ${P.logo ? '<img class="sh-logo" src="img/logo.png" alt="شعار الكنيسة">' : ''}
+      <div class="sh-rule"></div>
+      <h2 class="sh-title">${esc(title)}</h2>
+      ${P.subtitle.trim() ? `<div class="sh-sub">${esc(P.subtitle.trim())}</div>` : ''}
+      <div class="sh-meta"><span>التاريخ: ${longDate()}</span><span>عدد الأسماء: <b class="num">${total}</b></span></div>
+      ${rateInfo ? `<div class="sh-meta sh-meta2">${rateInfo}</div>` : ''}
+    </header>
+    ${!ready ? `<div class="sh-empty">${P.mode === 'group' ? 'اختر مجموعة أو أكثر لتظهر القائمة' : P.mode === 'custom' ? 'حدّد الأعضاء المطلوبين لتظهر القائمة' : 'لا يوجد أعضاء'}</div>` :
+      secs.map((s, i) => `${s.title ? `<h3 class="sh-sec ${P.pageBreak && i > 0 ? 'break' : ''}">${esc(s.title)} <span class="num">(${s.members.length})</span></h3>` : ''}${s.members.length ? table(s.members) : '<div class="sh-empty">لا يوجد أعضاء</div>'}`).join('')}
+    ${ready && signs.length ? `<div class="sh-sign">${signs.map((t) => `<div><span>${esc(t)}</span><i></i></div>`).join('')}</div>` : ''}
+    <footer class="sh-foot">كنيسة القديس أثناسيوس الرسولي · بولونيا، إيطاليا — نسخة رسمية مستخرجة من سجل الخدمة</footer>
+  </div>`;
+}
+
+function setPageStyle() {
+  let st = $('#page-style');
+  if (!st) { st = document.createElement('style'); st.id = 'page-style'; document.head.appendChild(st); }
+  st.textContent = `@page { size: A4 ${P.orient}; margin: 12mm 12mm 14mm; @bottom-center { content: "صفحة " counter(page) " من " counter(pages); font: 9pt Cairo, sans-serif; color: #555; } }`;
+}
+
+let ro = null;
+
+export function viewPrint(view) {
+  if (ro) ro.disconnect();
+  syncRateCols();
+  const courses = db.groups.filter(isCourse);
+  view.innerHTML = `${head({
+    title: 'طباعة وتصدير', sub: 'اختر من تريد طباعته والأعمدة المطلوبة، وستظهر لك النسخة الرسمية مباشرة',
+    acts: `<button class="btn" id="opts-toggle">${ic('panel')}<span>إخفاء الخيارات</span></button><button class="btn" id="do-csv">${ic('download')}تصدير Excel</button><button class="btn primary" id="do-print">${ic('printer')}طباعة / حفظ PDF</button>`,
+  })}
+  <div class="print-layout">
+    <div class="print-opts no-print" id="print-opts">
+      <section class="panel pad ps">
+        <h3><span class="step">1</span>من تريد أن تطبع؟</h3>
+        <div class="seg" id="p-mode"><button data-v="all">الجميع</button><button data-v="group">مجموعة / كورس</button><button data-v="custom">اختيار يدوي</button></div>
+        <div id="p-who"></div>
+      </section>
+
+      <section class="panel pad ps">
+        <h3><span class="step">2</span>الشكل</h3>
+        <div class="field"><div class="lbl-row"><label class="f" for="p-title">عنوان الكشف</label><button type="button" class="btn sm quiet" id="p-title-reset">العنوان التلقائي</button></div><input type="text" id="p-title"></div>
+        <div class="field"><label class="f" for="p-sub">سطر فرعي (اختياري)</label><input type="text" id="p-sub" placeholder="مثال: خدمة الشباب — عام 2026"></div>
+        <div class="field"><label class="f" for="p-sign">التوقيعات <span class="muted">(افصل بفاصلة، فارغ = بدون)</span></label><input type="text" id="p-sign"></div>
+        <div class="grid2">
+          <div class="field"><label class="f">اتجاه الصفحة</label><div class="seg" id="p-orient"><button data-v="portrait">عمودي</button><button data-v="landscape">أفقي</button></div></div>
+          <div class="field"><label class="f">حجم الخط</label><div class="seg" id="p-size"><button data-v="sm">صغير</button><button data-v="md">متوسط</button><button data-v="lg">كبير</button></div></div>
         </div>
+        <div class="field"><label class="f" for="p-sort">الترتيب</label><select id="p-sort"><option value="name">حسب الاسم</option><option value="age">حسب السن (الأكبر أولاً)</option><option value="gender">ذكور ثم إناث</option><option value="rate">حسب نسبة الحضور (الأعلى أولاً)</option></select></div>
+        <label class="chk"><input type="checkbox" id="p-logo"> إظهار شعار الكنيسة</label>
+      </section>
 
-        <table class="w-full text-right border-collapse border border-slate-300 mb-2">
-          <thead>
-            <tr class="bg-slate-800 text-white text-[11px] font-bold border-b border-slate-900">
-              <th class="p-1.5 text-center border-l border-slate-700 w-8">#</th>
-              <th class="p-1.5 border-l border-slate-700">الاسم الكامل</th>
-              <th class="p-1.5 text-center border-l border-slate-700 w-24">تاريخ الميلاد</th>
-              <th class="p-1.5 text-center border-l border-slate-700 w-20">السن</th>
-              <th class="p-1.5 border-l border-slate-700">أرقام التواصل</th>
-              <th class="p-1.5 border-l border-slate-700">المؤهل الدراسي</th>
-              <th class="p-1.5 border-l border-slate-700">نوع الخدمة</th>
-              <th class="p-1.5 text-center border-l border-slate-700 w-14">مع الأسرة</th>
-              <th class="p-1.5 text-center border-l border-slate-700 w-12">النوع</th>
-              <th class="p-1.5">الملاحظات</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rowsHtml}
-          </tbody>
-        </table>
-      </div>
-    `;
+      <section class="panel pad ps ps-cols">
+        <h3><span class="step">3</span>الأعمدة</h3>
+        <div class="f2">الأعمدة الظاهرة <span class="muted">(رتّبها بالأسهم، أو احذفها بـ ✕)</span></div>
+        <div class="chipbar" id="p-active"></div>
+        <div class="f2" style="margin-top:12px">أعمدة أخرى <span class="muted">(اضغط للإضافة)</span></div>
+        <div class="chipbar" id="p-avail"></div>
+        ${courses.length ? `<div class="ps-sub">
+          <div class="f2">نسبة الحضور (للكورسات)</div>
+          <div class="tags" id="p-rates">${courses.map((g) => `<button type="button" class="tag" data-r="${g.id}"><span class="dot c-${esc(g.color)}"></span>${esc(g.name)}</button>`).join('')}</div>
+          <label class="chk"><input type="checkbox" id="p-counts"> إظهار عدد مرات الحضور أيضاً (مثال: 8 من 10)</label>
+        </div>` : ''}
+        <label class="chk" style="margin-top:8px"><input type="checkbox" id="p-numbers"> ترقيم الصفوف</label>
+      </section>
+    </div>
+    <div class="print-main"><div id="sheet-host"></div></div>
+  </div>`;
+
+  const main = $('.print-main', view);
+  // Scale the A4 sheet so the whole width is always visible (no sideways scrolling).
+  const fit = () => {
+    const sh = $('.sheet', view);
+    if (!sh) return;
+    const natural = P.orient === 'landscape' ? 1122.5 : 793.7;
+    sh.style.zoom = String(Math.min(1, Math.max(0.3, (main.clientWidth - 40) / natural)));
+  };
+  ro = new ResizeObserver(fit);
+  ro.observe(main);
+
+  const drawSheet = () => {
+    setPageStyle();
+    $('#sheet-host', view).innerHTML = sheetHtml();
+    const t = $('#p-title', view);
+    t.placeholder = autoTitle();
+    if (!P.title && document.activeElement !== t) t.value = autoTitle();
+    fit();
+  };
+
+  /* --- who --- */
+  const drawWho = () => {
+    const host = $('#p-who', view);
+    $$('#p-mode button', view).forEach((b) => b.classList.toggle('on', b.dataset.v === P.mode));
+    if (P.mode === 'all') {
+      host.innerHTML = `<p class="muted small" style="margin-top:10px">سيتم طباعة كل الأعضاء (${db.members.length}).</p>`;
+    } else if (P.mode === 'group') {
+      const picked = db.groups.filter((g) => P.groups.has(g.id));
+      const suggest = picked.filter((g) => isCourse(g) && !P.rate.has(g.id));
+      host.innerHTML = `<div class="tags" style="margin-top:12px">${db.groups.length ? db.groups.map((g) => `<button type="button" class="tag ${P.groups.has(g.id) ? 'on' : ''}" data-g="${g.id}"><span class="dot c-${esc(g.color)}"></span>${esc(g.name)}</button>`).join('') : '<span class="muted small">لا توجد مجموعات</span>'}</div>
+        ${picked.length ? `<div class="ps-sub"><div class="f2">الاسم الذي يظهر في الطباعة</div>${picked.map((g) => `<input type="text" class="alias" data-alias="${g.id}" value="${esc(P.alias[g.id] || '')}" placeholder="${esc(g.name)}" aria-label="اسم ${esc(g.name)} في الطباعة">`).join('')}
+          <div class="muted small">اتركه فارغاً لاستخدام الاسم المحفوظ. التعديل هنا للطباعة فقط ولا يغيّر اسم المجموعة.</div></div>` : ''}
+        ${suggest.map((g) => `<button type="button" class="btn sm block-sm" data-addrate="${g.id}" style="margin-top:8px">${ic('chart', 'sm')}إضافة نسبة الحضور — ${esc(disp(g))}</button>`).join('')}
+        <label class="chk" style="margin-top:12px"><input type="checkbox" id="p-split" ${P.split ? 'checked' : ''}> تقسيم القائمة إلى أقسام حسب المجموعة</label>
+        <label class="chk ${P.split ? '' : 'off'}"><input type="checkbox" id="p-break" ${P.pageBreak ? 'checked' : ''} ${P.split ? '' : 'disabled'}> كل قسم في صفحة منفصلة</label>`;
+      $$('[data-g]', host).forEach((b) => b.addEventListener('click', () => {
+        P.groups.has(b.dataset.g) ? P.groups.delete(b.dataset.g) : P.groups.add(b.dataset.g);
+        drawWho(); drawSheet();
+      }));
+      $$('[data-alias]', host).forEach((i) => i.addEventListener('input', () => { P.alias[i.dataset.alias] = i.value; drawCols(); drawSheet(); }));
+      $$('[data-addrate]', host).forEach((b) => b.addEventListener('click', () => { P.rate.add(b.dataset.addrate); syncRateCols(); drawRates(); drawCols(); drawWho(); drawSheet(); }));
+      $('#p-split', host)?.addEventListener('change', (e) => { P.split = e.target.checked; if (!P.split) P.pageBreak = false; drawWho(); drawSheet(); });
+      $('#p-break', host)?.addEventListener('change', (e) => { P.pageBreak = e.target.checked; drawSheet(); });
+    } else {
+      host.innerHTML = `<div class="search" style="margin-top:12px">${ic('search')}<input type="search" id="p-q" placeholder="ابحث بالاسم" value="${esc(P.q)}"></div>
+        <div class="toolbar" style="margin:10px 0 6px"><button class="btn sm" id="p-selall">تحديد الظاهر</button><button class="btn sm" id="p-selnone">مسح التحديد</button><span class="muted small num" id="p-selcount" style="margin-inline-start:auto"></span></div>
+        <div class="panel checklist pick-box" id="p-list"></div>`;
+      const drawList = () => {
+        const q = norm(P.q);
+        const list = db.members.filter((m) => !q || norm(m.name).includes(q)).sort(byName);
+        $('#p-list', host).innerHTML = list.length ? list.slice(0, 400).map((m) => `<div class="item ${P.custom.has(m.id) ? 'on' : ''}" data-id="${m.id}"><span class="checkbox">${ic('check')}</span><span class="nm">${esc(m.name)}</span></div>`).join('') : '<div class="empty">لا توجد نتائج</div>';
+        $('#p-selcount', host).textContent = `المحدد: ${P.custom.size}`;
+        return list;
+      };
+      let shown = drawList();
+      $('#p-q', host).addEventListener('input', (e) => { P.q = e.target.value; shown = drawList(); });
+      $('#p-list', host).addEventListener('click', (e) => {
+        const r = e.target.closest('[data-id]'); if (!r) return;
+        P.custom.has(r.dataset.id) ? P.custom.delete(r.dataset.id) : P.custom.add(r.dataset.id);
+        r.classList.toggle('on'); $('#p-selcount', host).textContent = `المحدد: ${P.custom.size}`; drawSheet();
+      });
+      $('#p-selall', host).onclick = () => { shown.forEach((m) => P.custom.add(m.id)); drawList(); drawSheet(); };
+      $('#p-selnone', host).onclick = () => { P.custom.clear(); drawList(); drawSheet(); };
+    }
+  };
+
+  /* --- columns: shown ones (ordered) + the rest to add --- */
+  const drawCols = () => {
+    const act = activeCols();
+    const rest = P.cols.order.filter((k) => !P.cols.on.has(k));
+    $('#p-active', view).innerHTML = act.map((k, i) => `<span class="cchip">
+      <button type="button" class="mvb" data-mv="${esc(k)}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="تقديم">${ic('chevronR', 'sm')}</button>
+      <span class="cl">${esc(LABEL(k))}</span>
+      ${k === 'name' ? '' : `<button type="button" class="mvb rm" data-off="${esc(k)}" aria-label="إزالة">${ic('x', 'sm')}</button>`}
+      <button type="button" class="mvb" data-mv="${esc(k)}" data-d="1" ${i === act.length - 1 ? 'disabled' : ''} aria-label="تأخير">${ic('chevron', 'sm')}</button></span>`).join('');
+    $('#p-avail', view).innerHTML = rest.length ? rest.map((k) => `<button type="button" class="tag" data-on="${esc(k)}">${ic('plus', 'sm')}${esc(LABEL(k))}</button>`).join('') : '<span class="muted small">كل الأعمدة ظاهرة</span>';
+  };
+  $('.ps-cols', view).addEventListener('click', (e) => {
+    const off = e.target.closest('[data-off]'), on = e.target.closest('[data-on]'), mv = e.target.closest('[data-mv]');
+    if (off) P.cols.on.delete(off.dataset.off);
+    else if (on) P.cols.on.add(on.dataset.on);
+    else if (mv) {
+      const act = activeCols(), i = act.indexOf(mv.dataset.mv), j = i + +mv.dataset.d, o = P.cols.order;
+      if (j < 0 || j >= act.length) return;
+      const a2 = o.indexOf(act[i]), b2 = o.indexOf(act[j]);
+      [o[a2], o[b2]] = [o[b2], o[a2]];
+    } else return;
+    saveCols(); drawCols(); drawSheet();
   });
 
-  const printHtml = `
-    <div class="p-4 bg-white text-slate-900 font-sans">
-      <!-- Church Letterhead / Header -->
-      <div class="flex items-center justify-between border-b-2 border-slate-900 pb-3 mb-4">
-        <!-- Right side (Arabic Church Name) -->
-        <div class="text-right">
-          <h1 class="text-lg font-bold text-slate-900 tracking-tight">كنيسة القديس أثناسيوس الرسولي</h1>
-          <p class="text-xs text-slate-700 font-medium">Chiesa Copta Ortodossa di Sant'Atanasio</p>
-          <p class="text-xs text-slate-500 mt-1">كشف بيانات المخدومين والخدام - سجل الخدمة</p>
-        </div>
+  /* --- attendance-rate courses --- */
+  const drawRates = () => {
+    $$('#p-rates [data-r]', view).forEach((b) => b.classList.toggle('on', P.rate.has(b.dataset.r)));
+    const c = $('#p-counts', view); if (c) c.checked = P.showCounts;
+  };
+  $('#p-rates', view)?.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-r]'); if (!b) return;
+    P.rate.has(b.dataset.r) ? P.rate.delete(b.dataset.r) : P.rate.add(b.dataset.r);
+    syncRateCols(); drawRates(); drawCols(); drawWho(); drawSheet();
+  });
+  $('#p-counts', view)?.addEventListener('change', (e) => { P.showCounts = e.target.checked; syncRateCols(); drawCols(); drawSheet(); });
 
-        <!-- Center: Church Logo (Picture5.png) -->
-        <div class="flex flex-col items-center">
-          <img src="Picture5.png" alt="شعار كنيسة القديس أثناسيوس" class="w-14 h-14 object-contain" />
-        </div>
+  /* --- look & feel --- */
+  const seg = (id, key, after) => {
+    const el = $(id, view);
+    const paint = () => $$('button', el).forEach((b) => b.classList.toggle('on', b.dataset.v === P[key]));
+    el.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { P[key] = b.dataset.v; paint(); (after || drawSheet)(); } });
+    paint();
+  };
+  seg('#p-mode', 'mode', () => { drawWho(); drawSheet(); });
+  seg('#p-orient', 'orient');
+  seg('#p-size', 'size');
+  const bind = (id, key, type = 'value') => {
+    const el = $(id, view);
+    el[type === 'checked' ? 'checked' : 'value'] = P[key];
+    el.addEventListener(type === 'checked' ? 'change' : 'input', () => { P[key] = type === 'checked' ? el.checked : el.value; drawSheet(); });
+  };
+  bind('#p-sub', 'subtitle'); bind('#p-sign', 'sign'); bind('#p-sort', 'sort');
+  bind('#p-logo', 'logo', 'checked'); bind('#p-numbers', 'numbers', 'checked');
+  // Title: shows the automatic title until you type your own; clearing it (or the button) goes back to automatic.
+  $('#p-title', view).value = P.title || autoTitle();
+  $('#p-title', view).addEventListener('input', (e) => { P.title = e.target.value.trim() ? e.target.value : ''; drawSheet(); });
+  $('#p-title-reset', view).onclick = () => { P.title = ''; $('#p-title', view).value = autoTitle(); drawSheet(); };
 
-        <!-- Left side: Report Metadata -->
-        <div class="text-left text-xs space-y-1">
-          <div><strong class="text-slate-800">تاريخ الطباعة:</strong> ${printDate}</div>
-          <div><strong class="text-slate-800">التوقيت:</strong> ${printTime}</div>
-          <div><strong class="text-slate-800">التصنيف:</strong> <span class="font-bold">${groupLabel}</span></div>
-          <div><strong class="text-slate-800">إجمالي الأفراد:</strong> <span class="font-bold font-mono">${filtered.length} فرد</span></div>
-        </div>
-      </div>
+  /* --- actions --- */
+  $('#opts-toggle', view).onclick = () => {
+    const box = $('#print-opts', view);
+    box.classList.toggle('hidden');
+    $('#opts-toggle span', view).textContent = box.classList.contains('hidden') ? 'إظهار الخيارات' : 'إخفاء الخيارات';
+  };
+  $('#do-print', view).onclick = () => {
+    if (!sections().some((s) => s.members.length)) { toast('لا توجد أسماء للطباعة — اختر الأعضاء أولاً'); return; }
+    setPageStyle();
+    window.print();
+  };
+  $('#do-csv', view).onclick = () => {
+    const secs = sections();
+    const cols = activeCols();
+    if (!secs.some((s) => s.members.length)) { toast('لا توجد أسماء للتصدير'); return; }
+    const rows = [[...(P.numbers ? ['م'] : []), ...cols.map(LABEL)]];
+    secs.forEach((s) => s.members.forEach((m, i) => rows.push([...(P.numbers ? [i + 1] : []), ...cols.map((k) => colValue(k, m))])));
+    downloadCsv(`${(P.title.trim() || autoTitle()).slice(0, 60)}_${today()}.csv`, rows);
+  };
 
-      <!-- Information notice -->
-      <div class="flex items-center justify-between text-[10px] text-slate-500 mb-3 px-1 border-b border-slate-200 pb-1">
-        <span>* علامة النجمة (*) بجوار الاسم تعني متزوج.</span>
-        <span>كود التوثيق: SA-${Date.now().toString(36).toUpperCase()}</span>
-      </div>
-
-      <!-- Printed Group Sections -->
-      ${sectionsHtml}
-
-      <!-- Official Footer -->
-      <div class="flex items-center justify-between border-t border-slate-400 pt-2 mt-4 text-[10px] text-slate-500">
-        <span>كنيسة القديس أثناسيوس الرسولي - جميع الحقوق محفوظة</span>
-        <span>سجل الخدمة الرقمي المعتمد</span>
-      </div>
-    </div>
-  `;
-
-  printContainer.innerHTML = printHtml;
-  window.print();
+  drawWho(); drawCols(); drawRates(); drawSheet();
 }

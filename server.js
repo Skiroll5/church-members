@@ -5,22 +5,15 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const PORT = process.env.PORT || 3001;
+const PORT = Number(process.env.PORT) || 3001;
 const BASE_DIR = __dirname;
-const JSON_FILE_PATH = path.join(BASE_DIR, 'church_members.json');
-
-// Ensure church_members.json exists in the server directory
-if (!fs.existsSync(JSON_FILE_PATH)) {
-  try {
-    fs.writeFileSync(JSON_FILE_PATH, '[]\n', 'utf8');
-    console.log('Initialized empty church_members.json at:', JSON_FILE_PATH);
-  } catch (err) {
-    console.error('Error creating church_members.json:', err);
-  }
-}
+const DATA_FILE = path.join(BASE_DIR, 'church_data.json');
+const LEGACY_FILE = path.join(BASE_DIR, 'church_members.json');
+const BACKUP_DIR = path.join(BASE_DIR, 'backups');
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.png': 'image/png',
@@ -42,44 +35,71 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // API endpoint for direct file save
-  if (req.url === '/api/save' && req.method === 'POST') {
-    let body = '';
-    req.on('data', chunk => {
-      body += chunk.toString();
-    });
+  // Data API: the whole database (members, groups, sessions) as one JSON document
+  if (req.url === '/api/data' && req.method === 'GET') {
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    try {
+      if (fs.existsSync(DATA_FILE)) {
+        res.writeHead(200);
+        res.end(fs.readFileSync(DATA_FILE, 'utf8'));
+      } else if (fs.existsSync(LEGACY_FILE)) {
+        // First run after the redesign: hand the old members list to the app for migration
+        res.writeHead(200);
+        res.end(JSON.stringify({ legacyMembers: JSON.parse(fs.readFileSync(LEGACY_FILE, 'utf8')) }));
+      } else {
+        res.writeHead(200);
+        res.end('{}');
+      }
+    } catch (err) {
+      res.writeHead(500);
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
 
+  if (req.url === '/api/data' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk.toString(); });
     req.on('end', () => {
       try {
         const parsed = JSON.parse(body);
-        if (!Array.isArray(parsed)) {
+        if (!parsed || !Array.isArray(parsed.members) || !Array.isArray(parsed.groups) || !Array.isArray(parsed.sessions)) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Expected an array of members' }));
+          res.end(JSON.stringify({ error: 'Expected { members, groups, sessions }' }));
           return;
         }
-
-        // Backup existing file before overwriting
+        // One backup per day, kept in ./backups (kept out of git)
         try {
-          if (fs.existsSync(JSON_FILE_PATH)) {
-            const backupPath = path.join(BASE_DIR, 'church_members.backup.json');
-            fs.copyFileSync(JSON_FILE_PATH, backupPath);
+          if (fs.existsSync(DATA_FILE)) {
+            fs.mkdirSync(BACKUP_DIR, { recursive: true });
+            const day = new Date().toISOString().slice(0, 10);
+            const bk = path.join(BACKUP_DIR, `church_data_${day}.json`);
+            if (!fs.existsSync(bk)) fs.copyFileSync(DATA_FILE, bk);
           }
-        } catch (backupErr) {
-          console.warn('Could not create backup:', backupErr.message);
-        }
+        } catch (e) { console.warn('Could not create backup:', e.message); }
 
-        // Write formatted JSON to disk
-        fs.writeFileSync(JSON_FILE_PATH, JSON.stringify(parsed, null, 2), 'utf8');
-        console.log(`[${new Date().toLocaleTimeString()}] Saved ${parsed.length} members to church_members.json`);
-
+        // Write atomically so a crash never leaves a half-written file
+        const tmp = DATA_FILE + '.tmp';
+        fs.writeFileSync(tmp, JSON.stringify(parsed, null, 2), 'utf8');
+        fs.renameSync(tmp, DATA_FILE);
+        console.log(`[${new Date().toLocaleTimeString()}] Saved ${parsed.members.length} members, ${parsed.sessions.length} sessions`);
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: true, count: parsed.length }));
+        res.end(JSON.stringify({ success: true }));
       } catch (err) {
         console.error('Error saving JSON:', err);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: err.message }));
       }
     });
+    return;
+  }
+
+  // Never serve the private data files as static files
+  const blocked = /\/(church_data|church_members)[^/]*\.json$|^\/backups\//i;
+  if (blocked.test(decodeURI(req.url.split('?')[0]))) {
+    res.writeHead(404);
+    res.end('Not found');
     return;
   }
 
@@ -111,7 +131,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, {
       'Content-Type': contentType,
       'Content-Length': stats.size,
-      'Cache-Control': 'no-cache'
+      'Cache-Control': 'no-store'
     });
 
     const stream = fs.createReadStream(filePath);

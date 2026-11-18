@@ -1,0 +1,7 @@
+# Private data - local use only, never commit
+church_members.json
+church_members.backup.json
+church_data.json
+church_data.backup.json
+backups/
+*.backup.json
