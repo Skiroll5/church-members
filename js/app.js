@@ -95,6 +95,8 @@ let memberQuery = '';
 let memberGroupFilter = 'all';
 let memberSort = null; // { key, dir: 1 | -1 } or null = by name
 
+const toggleMemberSort = (k) => { memberSort = !memberSort || memberSort.key !== k ? { key: k, dir: 1 } : memberSort.dir === 1 ? { key: k, dir: -1 } : null; };
+
 /** Comparator for sorting the members table by a header; empty values always go last. */
 function memberSorter({ key, dir }) {
   const val = (m) => {
@@ -446,8 +448,8 @@ function tabReport(t, g, rep) {
 function tabMembers(t, g) {
   const draw = () => {
     const q = norm(rosterQuery);
-    const list = rosterOf(g.id).filter((m) => !q || norm(m.name + ' ' + m.phone).includes(q)).sort(byName);
-    $('#roster', t).innerHTML = list.length ? memberTable(list, { remove: `إزالة من ${g.name}` }) : `<div class="empty">${rosterQuery ? 'لا توجد نتائج' : 'لا يوجد أعضاء بعد'}</div>`;
+    const list = rosterOf(g.id).filter((m) => !q || norm(m.name + ' ' + m.phone).includes(q)).sort(memberSort ? memberSorter(memberSort) : byName);
+    $('#roster', t).innerHTML = list.length ? memberTable(list, { remove: `إزالة من ${g.name}`, sort: memberSort || { key: '' } }) : `<div class="empty">${rosterQuery ? 'لا توجد نتائج' : 'لا يوجد أعضاء بعد'}</div>`;
     bindCommon($('#roster', t));
     $$('[data-remove]', t).forEach((b) => b.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -458,6 +460,12 @@ function tabMembers(t, g) {
   };
   t.innerHTML = `<div class="toolbar"><div class="search">${ic('search')}<input type="search" id="rq" placeholder="بحث في الأعضاء" value="${esc(rosterQuery)}"></div>
     ${colButton()}<button class="btn primary" id="add-members">${ic('userPlus')}إضافة أعضاء</button></div><div class="panel" id="roster"></div>`;
+  $('#roster', t).addEventListener('click', (e) => {
+    const b = e.target.closest('[data-sort]'); if (!b) return;
+    e.stopPropagation();
+    toggleMemberSort(b.dataset.sort);
+    draw();
+  });
   $('#rq', t).addEventListener('input', (e) => { rosterQuery = e.target.value; draw(); });
   bindColButton(t, draw);
   $('#add-members', t).onclick = () => pickMembers({
@@ -606,8 +614,7 @@ function viewMembers() {
   };
   $('#mlist').addEventListener('click', (e) => {
     const b = e.target.closest('[data-sort]'); if (!b) return;
-    const k = b.dataset.sort;
-    memberSort = !memberSort || memberSort.key !== k ? { key: k, dir: 1 } : memberSort.dir === 1 ? { key: k, dir: -1 } : null;
+    toggleMemberSort(b.dataset.sort);
     draw();
   });
   $('#mq').addEventListener('input', (e) => { memberQuery = e.target.value; draw(); });
