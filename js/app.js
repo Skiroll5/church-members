@@ -7,7 +7,7 @@ import {
   db, COLORS, status, load, onChange, onStatus, commit, exportJson, clearLocal, saveNow,
   adoptDraft, discardDraft, markConfirmed, importData, replaceAll,
   today, getMember, getGroup, getSession, isCourse, rosterOf, sessionsOf, ageOf, birthdayOf,
-  saveMember, deleteMember, saveGroup, deleteGroup, setMembership, createSession, deleteSession,
+  saveMember, deleteMember, saveGroup, deleteGroup, moveGroup, setMembership, createSession, deleteSession,
   courseReport, memberReport, pendingOf, discardMemberChanges,
 } from './store.js';
 import {
@@ -75,13 +75,14 @@ function bindColButton(root, onChange) {
   };
 }
 
-function courseTable(groups) {
+function courseTable(groups, reorder = false) {
   const withAvg = groups.some(isCourse);
-  return `<div class="panel table-wrap"><table class="table"><thead><tr><th>الاسم</th><th class="hide-sm">الأعضاء</th>${withAvg ? '<th class="hide-sm">الجلسات</th><th class="hide-sm">آخر جلسة</th><th class="end">متوسط الحضور</th>' : ''}</tr></thead><tbody>
-    ${groups.map((g) => {
+  return `<div class="panel table-wrap"><table class="table"><thead><tr>${reorder ? '<th></th>' : ''}<th>الاسم</th><th class="hide-sm">الأعضاء</th>${withAvg ? '<th class="hide-sm">الجلسات</th><th class="hide-sm">آخر جلسة</th><th class="end">متوسط الحضور</th>' : ''}</tr></thead><tbody>
+    ${groups.map((g, i) => {
     const rep = courseReport(g.id);
     const last = rep.sessions.length ? rep.sessions[rep.sessions.length - 1].date : null;
-    return `<tr data-href="#/group/${g.id}"><td><div class="who"><span class="dot c-${esc(g.color)}"></span><div><div class="nm">${esc(g.name)}</div>
+    const mv = reorder ? `<td style="width:70px;white-space:nowrap"><button type="button" class="mvb" data-gmv="${g.id}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="أعلى">${ic('up', 'sm')}</button><button type="button" class="mvb" data-gmv="${g.id}" data-d="1" ${i === groups.length - 1 ? 'disabled' : ''} aria-label="أسفل" style="transform:rotate(180deg)">${ic('up', 'sm')}</button></td>` : '';
+    return `<tr ${reorder ? '' : `data-href="#/group/${g.id}"`}>${mv}<td><div class="who"><span class="dot c-${esc(g.color)}"></span><div><div class="nm">${esc(g.name)}</div>
       <div class="muted small show-sm">${rep.roster.length} عضو${isCourse(g) ? ` · ${rep.sessions.length} جلسة` : ''}</div></div></div></td>
       <td class="hide-sm num">${rep.roster.length}</td>
       ${withAvg ? `<td class="hide-sm num">${isCourse(g) ? rep.sessions.length : ''}</td><td class="hide-sm muted">${last ? fmtDate(last) : '—'}</td>
@@ -283,7 +284,15 @@ function viewMove() {
     };
     $('#mv-all', body).onclick = () => { list.forEach((m) => MV.sel.add(m.id)); draw(); };
     $('#mv-none', body).onclick = () => { MV.sel.clear(); draw(); };
-    const toggle = (id) => { MV.sel.has(id) ? MV.sel.delete(id) : MV.sel.add(id); draw(); };
+    const toggle = (id) => {
+      MV.sel.has(id) ? MV.sel.delete(id) : MV.sel.add(id);
+      // update in place (no re-render) so the list keeps its scroll position
+      const el = $(`#mv-list [data-id="${id}"]`, body); if (el) el.classList.toggle('on', MV.sel.has(id));
+      const c = [...MV.sel].filter((x) => all.some((m) => m.id === x)).length;
+      $('#mv-count', body).textContent = `المحدد: ${c} من ${all.length}`;
+      const go = $('#mv-go', body); go.disabled = !(c && MV.to && MV.to !== MV.from);
+      go.textContent = `${MV.copy ? 'نسخ' : 'نقل'} ${c} إلى المجموعة الأخرى`;
+    };
     $('#mv-list', body).onclick = (e) => { const r = e.target.closest('[data-id]'); if (r) toggle(r.dataset.id); };
     $('#mv-list', body).onkeydown = (e) => { if (e.key === ' ' || e.key === 'Enter') { const r = e.target.closest('[data-id]'); if (r) { e.preventDefault(); toggle(r.dataset.id); } } };
     $('#mv-go', body).onclick = async () => {
@@ -400,17 +409,23 @@ function pickCourseForAttendance() {
 }
 
 /* ---------- GROUPS ---------- */
+let reorderGroups = false;
 function viewGroups() {
   const courses = db.groups.filter(isCourse);
   const groups = db.groups.filter((g) => !isCourse(g));
   view.innerHTML = `${head({
     title: 'الكورسات والمجموعات', sub: 'الكورسات يُسجَّل لها حضور وغياب، أما المجموعات فهي للتنظيم فقط',
-    acts: `<button class="btn primary" data-new-group>${ic('plus')}جديد</button>`,
+    acts: `${db.groups.length > 1 ? `<button class="btn ${reorderGroups ? 'primary' : ''}" id="g-reorder">${reorderGroups ? 'تم' : 'ترتيب'}</button>` : ''}<button class="btn primary" data-new-group>${ic('plus')}جديد</button>`,
   })}
     ${db.groups.length === 0 ? emptyState('book', 'لا توجد كورسات أو مجموعات', 'ابدأ بإنشاء كورس لتسجيل الحضور.', `<button class="btn primary" data-new-group>${ic('plus')}إنشاء</button>`) : ''}
-    ${courses.length ? `<div class="h2" style="margin-top:0">الكورسات</div>${courseTable(courses)}` : ''}
-    ${groups.length ? `<div class="h2">المجموعات</div>${courseTable(groups)}` : ''}`;
+    ${courses.length ? `<div class="h2" style="margin-top:0">الكورسات</div>${courseTable(courses, reorderGroups)}` : ''}
+    ${groups.length ? `<div class="h2">المجموعات</div>${courseTable(groups, reorderGroups)}` : ''}`;
   bindCommon(view);
+  const rb = $('#g-reorder', view);
+  if (rb) rb.onclick = () => { reorderGroups = !reorderGroups; viewGroups(); };
+  $$('[data-gmv]', view).forEach((b) => {
+    b.onclick = () => { const y = window.scrollY; moveGroup(b.dataset.gmv, +b.dataset.d); window.scrollTo(0, y); };
+  });
 }
 
 function groupModal(id) {

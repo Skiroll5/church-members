@@ -303,6 +303,17 @@ export function saveGroup(data, id) {
   return id;
 }
 
+/** Move a group up (-1) or down (1) among the groups of the same kind (course / plain group). */
+export function moveGroup(id, dir) {
+  const g = getGroup(id); if (!g) return;
+  const same = db.groups.filter((x) => isCourse(x) === isCourse(g));
+  const j = same.indexOf(g) + dir;
+  if (j < 0 || j >= same.length) return;
+  const a = db.groups.indexOf(g), b = db.groups.indexOf(same[j]);
+  [db.groups[a], db.groups[b]] = [db.groups[b], db.groups[a]];
+  commit();
+}
+
 export function deleteGroup(id) {
   db.groups = db.groups.filter((g) => g.id !== id);
   db.members.forEach((m) => { m.groups = m.groups.filter((x) => x !== id); });
