@@ -85,7 +85,7 @@ const activeCols = () => P.cols.order.filter((k) => P.cols.on.has(k));
 /** Sort by a primary column, then an optional secondary one (e.g. gender, then age). Empty values go last; ties fall back to name. */
 function sorter() {
   const valid = (k) => DEFAULT_ORDER.includes(k) || (isDyn(k) && P.cols.order.includes(k));
-  const dobKey = (m) => { const p = String(m.dob || '').split(/[/-.]/).map(Number); return p.length === 3 && p[2] ? p[2] * 10000 + p[1] * 100 + p[0] : null; };
+  const dobKey = (m) => { const p = String(m.dob || '').split(/[/\-.]/).map(Number); return p.length === 3 && p[2] ? p[2] * 10000 + p[1] * 100 + p[0] : null; };
   const cmpBy = (k, dir) => {
     if (k === 'name') return (a, b) => byName(a, b) * dir;
     const val = (m) => {
