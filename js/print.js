@@ -37,6 +37,8 @@ const saveCols = () => {
 
 const FONT = { sm: 10, md: 11.5, lg: 13 };
 const disp = (g) => (P.alias[g.id] || '').trim() || g.name;
+/** The selected groups, in the order chosen on the page (reorderable) */
+const pickedGroups = () => [...P.groups].map(getGroup).filter(Boolean);
 const gname = (id) => { const g = getGroup(id); return g ? disp(g) : ''; };
 
 function LABEL(k) {
@@ -118,7 +120,7 @@ function sections() {
   const cmp = sorter();
   if (P.mode === 'custom') return [{ title: '', members: db.members.filter((m) => P.custom.has(m.id)).sort(cmp) }];
   if (P.mode === 'group') {
-    const gs = db.groups.filter((g) => P.groups.has(g.id));
+    const gs = pickedGroups();
     const keep = (m) => !P.excl.has(m.id);
     if (P.split) return gs.map((g) => ({ title: disp(g), members: db.members.filter((m) => keep(m) && m.groups.includes(g.id)).sort(cmp) }));
     const set = new Set(gs.map((g) => g.id));
@@ -128,7 +130,7 @@ function sections() {
 }
 
 function autoTitle() {
-  if (P.mode === 'group' && P.groups.size) return 'كشف أسماء — ' + db.groups.filter((g) => P.groups.has(g.id)).map(disp).join(' + ');
+  if (P.mode === 'group' && P.groups.size) return 'كشف أسماء — ' + pickedGroups().map(disp).join(' + ');
   if (P.mode === 'custom') return 'كشف أسماء مختارة';
   return 'كشف أسماء المخدومين';
 }
@@ -249,10 +251,10 @@ export function viewPrint(view) {
     if (P.mode === 'all') {
       host.innerHTML = `<p class="muted small" style="margin-top:10px">سيتم طباعة كل الأعضاء (${db.members.length}).</p>`;
     } else if (P.mode === 'group') {
-      const picked = db.groups.filter((g) => P.groups.has(g.id));
+      const picked = pickedGroups();
       const suggest = picked.filter((g) => isCourse(g) && !P.rate.has(g.id));
       host.innerHTML = `<div class="tags" style="margin-top:12px">${db.groups.length ? db.groups.map((g) => `<button type="button" class="tag ${P.groups.has(g.id) ? 'on' : ''}" data-g="${g.id}"><span class="dot c-${esc(g.color)}"></span>${esc(g.name)}</button>`).join('') : '<span class="muted small">لا توجد مجموعات</span>'}</div>
-        ${picked.length ? `<div class="ps-sub"><div class="f2">الاسم الذي يظهر في الطباعة</div>${picked.map((g) => `<input type="text" class="alias" data-alias="${g.id}" value="${esc(P.alias[g.id] || '')}" placeholder="${esc(g.name)}" aria-label="اسم ${esc(g.name)} في الطباعة">`).join('')}
+        ${picked.length ? `<div class="ps-sub"><div class="f2">ترتيب الأقسام والاسم الذي يظهر في الطباعة <span class="muted">(الأسهم لتغيير الترتيب)</span></div>${picked.map((g, i) => `<div style="display:flex;gap:4px;align-items:center">${picked.length > 1 ? `<button type="button" class="mvb" data-gmv="${g.id}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="أعلى">${ic('up', 'sm')}</button><button type="button" class="mvb" data-gmv="${g.id}" data-d="1" ${i === picked.length - 1 ? 'disabled' : ''} aria-label="أسفل" style="transform:rotate(180deg)">${ic('up', 'sm')}</button>` : ''}<input type="text" style="flex:1" class="alias" data-alias="${g.id}" value="${esc(P.alias[g.id] || '')}" placeholder="${esc(g.name)}" aria-label="اسم ${esc(g.name)} في الطباعة"></div>`).join('')}
           <div class="muted small">اتركه فارغاً لاستخدام الاسم المحفوظ. التعديل هنا للطباعة فقط ولا يغيّر اسم المجموعة.</div></div>` : ''}
         ${suggest.map((g) => `<button type="button" class="btn sm block-sm" data-addrate="${g.id}" style="margin-top:8px">${ic('chart', 'sm')}إضافة نسبة الحضور — ${esc(disp(g))}</button>`).join('')}
         ${picked.length ? `<div class="ps-sub"><div class="f2">استثناء أسماء <span class="muted">(ألغِ التحديد لإخراج اسم من الكشف)</span></div>
@@ -260,6 +262,13 @@ export function viewPrint(view) {
           <div class="panel checklist pick-box" id="p-exlist"></div></div>` : ''}
         <label class="chk" style="margin-top:12px"><input type="checkbox" id="p-split" ${P.split ? 'checked' : ''}> تقسيم القائمة إلى أقسام حسب المجموعة</label>
         <label class="chk ${P.split ? '' : 'off'}"><input type="checkbox" id="p-break" ${P.pageBreak ? 'checked' : ''} ${P.split ? '' : 'disabled'}> كل قسم في صفحة منفصلة</label>`;
+      $$('[data-gmv]', host).forEach((b) => {
+        b.onclick = () => {
+          const ids = [...P.groups], i = ids.indexOf(b.dataset.gmv), j = i + +b.dataset.d;
+          if (i < 0 || j < 0 || j >= ids.length) return;
+          [ids[i], ids[j]] = [ids[j], ids[i]]; P.groups = new Set(ids); drawWho(); drawSheet();
+        };
+      });
       if (picked.length) {
         const gset = new Set(picked.map((g) => g.id));
         const pool = db.members.filter((m) => m.groups.some((id) => gset.has(id))).sort(byName);

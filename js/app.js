@@ -415,7 +415,7 @@ function viewGroups() {
   const groups = db.groups.filter((g) => !isCourse(g));
   view.innerHTML = `${head({
     title: 'الكورسات والمجموعات', sub: 'الكورسات يُسجَّل لها حضور وغياب، أما المجموعات فهي للتنظيم فقط',
-    acts: `${db.groups.length > 1 ? `<button class="btn ${reorderGroups ? 'primary' : ''}" id="g-reorder">${reorderGroups ? 'تم' : 'ترتيب'}</button>` : ''}<button class="btn primary" data-new-group>${ic('plus')}جديد</button>`,
+    acts: `${db.groups.length ? `<button class="btn ${reorderGroups ? 'primary' : ''}" id="g-reorder">${reorderGroups ? 'تم' : 'ترتيب'}</button>` : ''}<button class="btn primary" data-new-group>${ic('plus')}جديد</button>`,
   })}
     ${db.groups.length === 0 ? emptyState('book', 'لا توجد كورسات أو مجموعات', 'ابدأ بإنشاء كورس لتسجيل الحضور.', `<button class="btn primary" data-new-group>${ic('plus')}إنشاء</button>`) : ''}
     ${courses.length ? `<div class="h2" style="margin-top:0">الكورسات</div>${courseTable(courses, reorderGroups)}` : ''}
